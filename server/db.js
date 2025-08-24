@@ -25,8 +25,8 @@ const connect = async () => {
 
 const userSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
-  name: String,
-  email: String,
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true, index: true },
   phone: String,
   designation: String,
   teamName: String, // Added for team support

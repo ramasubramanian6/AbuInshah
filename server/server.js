@@ -111,6 +111,12 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
       return res.status(400).json({ error: 'Photo is required' });
     }
 
+    // Prevent duplicate email registrations
+    const existingByEmail = await db.User.findOne({ email });
+    if (existingByEmail) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+
     const filenameSafe = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const finalPhotoPath = path.join(UPLOADS_DIR, `${filenameSafe}_${Date.now()}.jpeg`);
     
@@ -132,36 +138,27 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
   const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
 
     try {
-      if (designation && designation.toLowerCase() === 'both') {
-        const id1 = Date.now().toString();
-        const userData1 = { id: id1, name, phone, email, designation: 'Health Insurance Advisor', photoUrl };
-        if (teamName) userData1.teamName = teamName;
-        const id2 = (Date.now() + 1).toString();
-        const userData2 = { id: id2, name, phone, email, designation: 'Wealth Manager', photoUrl };
-        if (teamName) userData2.teamName = teamName;
-        await db.createUser(userData1);
-        await db.createUser(userData2);
-        res.json({ success: true, message: '✅ Two profiles registered successfully', users: [userData1, userData2] });
-      } else {
-        const id = Date.now().toString();
-        const userData = { id, name, phone, email, designation, photoUrl };
-        if (teamName) userData.teamName = teamName;
+      // To avoid duplicate emails, if user selected 'both' we store both designations
+      // in one record as a comma-separated designation value.
+      const id = Date.now().toString();
+      const actualDesignation = designation && designation.toLowerCase() === 'both' ? 'Health insurance advisor,Wealth Manager' : designation;
+      const userData = { id, name, phone, email, designation: actualDesignation, photoUrl };
+      if (teamName) userData.teamName = teamName;
 
-        // If Cloudinary is configured, upload the processed image and store the remote URL
-        try {
-          if (cloudinary.config().api_key) {
-            const uploadRes = await uploadLocalImage(finalPhotoPath, { folder: 'wealthplus' });
-            if (uploadRes && uploadRes.secure_url) {
-              userData.photo = uploadRes.secure_url;
-            }
+      // If Cloudinary is configured, upload the processed image and store the remote URL
+      try {
+        if (cloudinary.config().api_key) {
+          const uploadRes = await uploadLocalImage(finalPhotoPath, { folder: 'wealthplus' });
+          if (uploadRes && uploadRes.secure_url) {
+            userData.photo = uploadRes.secure_url;
           }
-        } catch (e) {
-          console.warn('Cloudinary upload failed (ignored):', e.message || e);
         }
-
-        await db.createUser(userData);
-        res.json({ success: true, message: '✅ Member registered successfully', user: userData });
+      } catch (e) {
+        console.warn('Cloudinary upload failed (ignored):', e.message || e);
       }
+
+      await db.createUser(userData);
+      res.json({ success: true, message: '✅ Member registered successfully', user: userData });
     } catch (err) {
       if (err.message && err.message.includes('duplicate key')) {
         return res.status(400).json({ error: 'Duplicate entry' });

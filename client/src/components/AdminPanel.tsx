@@ -30,12 +30,13 @@ type DashboardStats = {
   healthAdvisors: number;
   wealthManagers: number;
   partners: number;
+  teamMembers: number;
   designatedUsers: number;
 };
 
 // ------------------ Small UI Bits ------------------
-const MobileDashboardCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode }> = ({ title, value, icon }) => (
-  <div className="bg-white rounded-lg p-3 border border-gray-200 shadow-sm">
+const MobileDashboardCard: React.FC<{ title: string; value: string | number; icon: React.ReactNode; onClick?: () => void }> = ({ title, value, icon, onClick }) => (
+  <div onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : -1} className={`bg-white rounded-lg p-3 border border-gray-200 shadow-sm ${onClick ? 'cursor-pointer' : ''}`}>
     <div className="flex items-center gap-2">
       <div className="bg-blue-50 p-2 rounded-lg flex-shrink-0">
         <span className="text-lg">{icon}</span>
@@ -77,8 +78,12 @@ const AdminPanel: React.FC = () => {
     healthAdvisors: 0,
     wealthManagers: 0,
     partners: 0,
+    teamMembers: 0,
     designatedUsers: 0,
   });
+
+  // Active filter for the list (all | health | wealth | partner | team)
+  const [activeFilter, setActiveFilter] = useState<'all' | 'health' | 'wealth' | 'partner' | 'team'>('all');
 
   // Backend status
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'pinging'>('pinging');
@@ -133,9 +138,11 @@ const AdminPanel: React.FC = () => {
         if (isWm) accum.wealthManagers += 1;
         if (isPartner) accum.partners += 1;
         if (isHa || isWm || isPartner) accum.designatedUsers += 1;
+        // teamMembers counted when user has a non-empty teamName
+        if (user.teamName && user.teamName.trim() !== '') accum.teamMembers += 1;
         return accum;
       },
-      { healthAdvisors: 0, wealthManagers: 0, partners: 0, designatedUsers: 0 }
+      { healthAdvisors: 0, wealthManagers: 0, partners: 0, teamMembers: 0, designatedUsers: 0 }
     );
     setDashboardStats({ ...acc, totalUsers: usersList.length });
   }, []);
@@ -155,7 +162,7 @@ const AdminPanel: React.FC = () => {
       setError(null);
     } catch (err) {
       setUsers([]);
-      setDashboardStats({ totalUsers: 0, healthAdvisors: 0, wealthManagers: 0, partners: 0, designatedUsers: 0 });
+    setDashboardStats({ totalUsers: 0, healthAdvisors: 0, wealthManagers: 0, partners: 0, teamMembers: 0, designatedUsers: 0 });
       const msg = err instanceof Error ? err.message : 'Failed to fetch users. Please try again later.';
       setError(msg);
       if (msg === 'Please login again') navigate('/admin-login');
@@ -400,6 +407,7 @@ const AdminPanel: React.FC = () => {
           </div>
           <MobileDashboardCard title="Health Advisors" value={loading ? '-' : dashboardStats.healthAdvisors} icon="⚕️" />
           <MobileDashboardCard title="Wealth Managers" value={loading ? '-' : dashboardStats.wealthManagers} icon="📈" />
+          <MobileDashboardCard title="Team Members" value={loading ? '-' : dashboardStats.teamMembers} icon="🧑‍🤝‍🧑" onClick={() => { setActiveFilter('team'); setActiveTab('list'); }} />
           <MobileDashboardCard title="Partners" value={loading ? '-' : dashboardStats.partners} icon="🤝" />
           <MobileDashboardCard title="Designated" value={loading ? '-' : dashboardStats.designatedUsers} icon="🎯" />
         </>
@@ -417,6 +425,7 @@ const AdminPanel: React.FC = () => {
           </div>
           <DesktopDashboardCard title="Health Advisors" value={loading ? '-' : dashboardStats.healthAdvisors} description="Health Insurance Advisors" icon="⚕️" />
           <DesktopDashboardCard title="Wealth Managers" value={loading ? '-' : dashboardStats.wealthManagers} description="Wealth Management Team" icon="📈" />
+          <DesktopDashboardCard title="Team Members" value={loading ? '-' : dashboardStats.teamMembers} description="Members registered with a team" icon="🧑‍🤝‍🧑" />
           <DesktopDashboardCard title="Partners" value={loading ? '-' : dashboardStats.partners} description="Business Partners" icon="🤝" />
           <DesktopDashboardCard title="Designated Users" value={loading ? '-' : dashboardStats.designatedUsers} description="Users with specific roles" icon="🎯" />
         </>
@@ -453,20 +462,53 @@ const AdminPanel: React.FC = () => {
     );
   };
 
-  const renderUserListContent = () => (
-    <div className="space-y-3">
-      {loading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto mb-3"></div>
-          <p className="text-gray-500 text-sm">Loading members...</p>
+  const renderUserListContent = () => {
+    // compute filtered list based on activeFilter
+    const filteredUsers = users.filter(user => {
+      if (activeFilter === 'all') return true;
+      if (activeFilter === 'team') return !!(user.teamName && user.teamName.trim() !== '');
+      const designations = (user.designation || '').split(',').map(d => d.trim());
+      if (activeFilter === 'health') return designations.includes('Health insurance advisor');
+      if (activeFilter === 'wealth') return designations.includes('Wealth Manager');
+      if (activeFilter === 'partner') return designations.includes('Partner');
+      return true;
+    });
+
+    if (loading) {
+      return (
+        <div className="space-y-3">
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto mb-3"></div>
+            <p className="text-gray-500 text-sm">Loading members...</p>
+          </div>
         </div>
-      ) : users.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500 text-sm">No members found</p>
+      );
+    }
+
+    if (users.length === 0) {
+      return (
+        <div className="space-y-3">
+          <div className="text-center py-8">
+            <p className="text-gray-500 text-sm">No members found</p>
+          </div>
         </div>
-      ) : (
+      );
+    }
+
+    if (filteredUsers.length === 0) {
+      return (
+        <div className="space-y-3">
+          <div className="text-center py-8">
+            <p className="text-gray-500 text-sm">No members match this filter</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
         <div ref={userListRef} className="space-y-3 overflow-y-auto pr-2 custom-scrollbar" style={{ maxHeight: userListMaxHeight }}>
-          {users.map(user => (
+          {filteredUsers.map(user => (
             <div key={user.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-4">
                 {/* Avatar + overlay actions */}
@@ -522,6 +564,9 @@ const AdminPanel: React.FC = () => {
                   <p className="font-bold text-base sm:text-lg text-gray-800 truncate">{user.name}</p>
                   <p className="text-xs sm:text-sm text-gray-600 truncate">{user.email}</p>
                   <p className="text-xs sm:text-sm text-gray-500">{user.phone}</p>
+                  {user.teamName && user.teamName.trim() !== '' && (
+                    <p className="text-xs mt-1 text-gray-600">Team: <span className="font-semibold">{user.teamName}</span></p>
+                  )}
                 </div>
 
                 {/* Right controls */}
@@ -534,6 +579,9 @@ const AdminPanel: React.FC = () => {
                       .map((d, i) => (
                         <span key={i} className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">{d}</span>
                       ))}
+                    {user.teamName && user.teamName.trim() !== '' && (
+                      <span className="bg-green-100 text-green-800 text-xs font-semibold px-2.5 py-1 rounded-full whitespace-nowrap">Team</span>
+                    )}
                   </div>
                   <div className="flex flex-row gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
                     <button
@@ -562,9 +610,9 @@ const AdminPanel: React.FC = () => {
             </div>
           ))}
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderEditFormContent = () => (
     <section className="bg-white p-4 sm:p-6 rounded-xl shadow-md border">
@@ -627,6 +675,17 @@ const AdminPanel: React.FC = () => {
               <option value="Partner">Partner</option>
               <option value="Health insurance advisor,Wealth Manager">Both Roles</option>
             </select>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="teamName" className="text-sm font-medium text-gray-700">Team Name (optional)</label>
+            <input
+              id="teamName"
+              type="text"
+              value={editingUser?.teamName ?? ''}
+              onChange={e => setEditingUser(prev => (prev ? { ...prev, teamName: e.target.value } : prev))}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+              placeholder="Enter team name if this member belongs to a team"
+            />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 pt-4">
@@ -748,12 +807,21 @@ const AdminPanel: React.FC = () => {
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2 sticky top-[calc(120px)] bg-white py-2 z-10 border-b">
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Registered Members</h2>
-                  <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">{users.length} total</span>
+                    <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">{users.length} total</span>
                 </div>
-                {users.length > 0 && <div className="text-sm text-gray-500">Scroll to see more members</div>}
+                  {users.length > 0 && <div className="text-sm text-gray-500">Scroll to see more members</div>}
               </div>
 
-              {renderUserListContent()}
+                {/* Filters */}
+                <div className="flex items-center gap-2 mb-4">
+                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('all')}>All</button>
+                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'health' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('health')}>Health</button>
+                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'wealth' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('wealth')}>Wealth</button>
+                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'team' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('team')}>Team</button>
+                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'partner' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('partner')}>Partners</button>
+                </div>
+
+                {renderUserListContent()}
             </section>
           </div>
         </div>

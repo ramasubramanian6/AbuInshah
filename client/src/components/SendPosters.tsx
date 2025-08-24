@@ -73,7 +73,6 @@ const SendPosters: React.FC = () => {
           value={designation}
           onChange={(e) => {
             setDesignation(e.target.value);
-            setSelectedTeam("");
           }}
         >
           <option value="Health insurance advisor">
