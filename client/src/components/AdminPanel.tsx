@@ -14,6 +14,8 @@ type User = {
   phone: string;
   designation: string;
   photoUrl?: string; // server path like "/uploads/xyz.jpg"
+  photo?: string; // remote URL (Cloudinary) when available
+  teamName?: string;
 };
 
 type ImageModalState = {
@@ -331,7 +333,12 @@ const AdminPanel: React.FC = () => {
       if (!response.ok) throw new Error('Failed to update photo');
       const data = await response.json(); // expect { photoUrl: "/uploads/..." }
 
-      const updated = users.map(u => (u.id === imageModal.userId ? { ...u, photoUrl: data.photoUrl } : u));
+      // Server may return `photo` (remote URL) and `photoUrl` (local path). Prefer `photo` when present.
+      const updated = users.map(u =>
+        u.id === imageModal.userId
+          ? { ...u, photoUrl: data.photoUrl || u.photoUrl, photo: data.photo || (u as any).photo }
+          : u
+      );
       setUsers(updated);
       message.success('Photo updated successfully');
       closeImageModal();
@@ -349,8 +356,8 @@ const AdminPanel: React.FC = () => {
           method: 'DELETE',
           credentials: 'include'
         });
-        if (!res.ok) throw new Error('Failed to delete photo');
-        const updated = users.map(u => (u.id === userId ? { ...u, photoUrl: undefined } : u));
+  if (!res.ok) throw new Error('Failed to delete photo');
+  const updated = users.map(u => (u.id === userId ? { ...u, photoUrl: undefined, photo: undefined } : u));
         setUsers(updated);
         message.success('Photo deleted successfully');
       } catch (err) {
@@ -467,7 +474,9 @@ const AdminPanel: React.FC = () => {
                   <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 bg-gray-100">
                     <img
                       src={
-                        user.photoUrl
+                        (user as any).photo
+                          ? (user as any).photo
+                          : user.photoUrl
                           ? `${API_BASE_URL}${user.photoUrl}`
                           : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`
                       }
@@ -481,7 +490,7 @@ const AdminPanel: React.FC = () => {
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-all duration-200 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 rounded-full">
                     <button
                       onClick={() =>
-                        openImageModal('edit', user.id, user.photoUrl ? `${API_BASE_URL}${user.photoUrl}` : undefined)
+                        openImageModal('edit', user.id, (user as any).photo ? (user as any).photo : user.photoUrl ? `${API_BASE_URL}${user.photoUrl}` : undefined)
                       }
                       className="p-1.5 bg-white rounded-full text-gray-700 hover:text-blue-600 transition-colors"
                       title="Edit photo"

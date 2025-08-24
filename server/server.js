@@ -17,6 +17,8 @@ const { getMembersByDesignation } = require('./utils/excel');
 const { processCircularImage, generateFooterSVG, createFinalPoster } = require('./utils/image');
 const { sendEmail, testEmailConfiguration } = require('./utils/emailSender');
 const db = require('./db');
+const { uploadLocalImage, cloudinary } = require('./utils/cloudinary');
+const axios = require('axios');
 
 const app = express();
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
@@ -127,7 +129,7 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
       }
     }
 
-    const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
+  const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
 
     try {
       if (designation && designation.toLowerCase() === 'both') {
@@ -144,6 +146,19 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
         const id = Date.now().toString();
         const userData = { id, name, phone, email, designation, photoUrl };
         if (teamName) userData.teamName = teamName;
+
+        // If Cloudinary is configured, upload the processed image and store the remote URL
+        try {
+          if (cloudinary.config().api_key) {
+            const uploadRes = await uploadLocalImage(finalPhotoPath, { folder: 'wealthplus' });
+            if (uploadRes && uploadRes.secure_url) {
+              userData.photo = uploadRes.secure_url;
+            }
+          }
+        } catch (e) {
+          console.warn('Cloudinary upload failed (ignored):', e.message || e);
+        }
+
         await db.createUser(userData);
         res.json({ success: true, message: '✅ Member registered successfully', user: userData });
       }
@@ -202,7 +217,21 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
       const finalImagePath = path.join(OUTPUT_DIR, `final_${Date.now()}_${person.name.replace(/\s+/g, '_')}.jpeg`);
       
       try {
-        let photoPath = path.join(__dirname, person.photoUrl || person.photo || '');
+        let photoPath = '';
+        // If the stored person.photo is a URL (Cloudinary), download it to a temp file
+        if (person.photo && String(person.photo).startsWith('http')) {
+          const tmpFile = path.join(UPLOADS_DIR, `${person.id || person._id}_remote_${Date.now()}.jpg`);
+          try {
+            const response = await axios.get(person.photo, { responseType: 'arraybuffer' });
+            await fs.promises.writeFile(tmpFile, response.data);
+            photoPath = tmpFile;
+          } catch (e) {
+            console.warn(`Failed to download remote photo for ${person.name}:`, e.message || e);
+            continue;
+          }
+        } else {
+          photoPath = path.join(__dirname, person.photoUrl || person.photo || '');
+        }
         if (!photoPath || !fs.existsSync(photoPath)) {
           console.warn(`Skipping poster for ${person.name}: Invalid or missing photo.`);
           continue;
@@ -261,6 +290,10 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
       } finally {
         // Ensure the final image is cleaned up after each attempt
         try { await fs.promises.unlink(finalImagePath); } catch (e) { /* ignore */ }
+        // Remove downloaded remote photo if we created one
+        if (person.photo && String(person.photo).startsWith('http')) {
+          try { if (photoPath && photoPath.includes('_remote_')) await fs.promises.unlink(photoPath); } catch (e) { /* ignore */ }
+        }
       }
     }
 
@@ -412,9 +445,22 @@ app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res
     }
 
     const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
-    await db.updateUser(id, { photoUrl, photo: photoUrl }); // Store both for backward compatibility
+    // Try to upload the processed image to Cloudinary (optional)
+    let remotePhoto = '';
+    try {
+      if (cloudinary && cloudinary.config && cloudinary.config().api_key) {
+        const uploadRes = await uploadLocalImage(finalPhotoPath, { folder: 'wealthplus' });
+        if (uploadRes && uploadRes.secure_url) remotePhoto = uploadRes.secure_url;
+      }
+    } catch (e) {
+      console.warn('Cloudinary upload failed (ignored):', e.message || e);
+    }
 
-    res.json({ success: true, photoUrl });
+    // Update DB: keep local photoUrl for legacy flows, set remote `photo` when available
+    const updatePayload = { photoUrl, photo: remotePhoto || photoUrl };
+    await db.updateUser(id, updatePayload);
+
+    res.json({ success: true, photoUrl, photo: updatePayload.photo });
   } catch (err) {
     console.error('Admin photo update error:', err);
     res.status(500).json({ error: 'Failed to update photo' });
