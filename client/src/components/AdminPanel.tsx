@@ -148,6 +148,7 @@ const AdminPanel: React.FC = () => {
       }
       const data: User[] = await response.json();
       setUsers(data);
+      console.log(data);
       calculateDashboardStats(data);
       setError(null);
     } catch (err) {

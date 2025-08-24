@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 
 const SendPosters: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [designation, setDesignation] = useState<string>('Health insurance advisor');
+  const [designation, setDesignation] = useState<string>(
+    "Health insurance advisor"
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // Remove team dropdown logic
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -24,9 +27,11 @@ const SendPosters: React.FC = () => {
       return;
     }
 
+
     const formData = new FormData();
-    formData.append('template', file); // ✅ Matches backend field
-    formData.append('designation', designation); // ✅ Required by backend
+    formData.append("template", file); // ✅ Matches backend field
+    formData.append("designation", designation); // ✅ Required by backend
+  // No teamName needed for Team, backend will send to all team members
 
     setLoading(true);
     setMessage(null);
@@ -34,7 +39,7 @@ const SendPosters: React.FC = () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL;
       const res = await fetch(`${API_URL}api/send-posters`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
       });
 
@@ -58,20 +63,32 @@ const SendPosters: React.FC = () => {
       <h2 className="text-2xl font-semibold mb-4">Send Personalized Posters</h2>
 
       <form onSubmit={handleSubmit}>
-        <label className="block mb-2 text-sm font-medium overflow-auto text-gray-700">Choose Designation</label>
+        <label className="block mb-2 text-sm font-medium overflow-auto text-gray-700">
+          Choose Designation
+        </label>
+
         <select
           className="w-full max-w-[220px] text-sm p-2 mb-4 border rounded mx-auto md:text-base md:max-w-full"
           style={{ maxWidth: 220 }}
           value={designation}
-          onChange={(e) => setDesignation(e.target.value)}
+          onChange={(e) => {
+            setDesignation(e.target.value);
+            setSelectedTeam("");
+          }}
         >
-          <option value="Health insurance advisor">Health insurance advisor</option>
+          <option value="Health insurance advisor">
+            Health insurance advisor
+          </option>
           <option value="Wealth Manager">Wealth Manager</option>
           <option value="Partner">Partner</option>
-         
+          <option value="Team">Team</option> {/* ✅ New option added */}
         </select>
 
-        <label className="block mb-2 text-sm font-medium text-gray-700">Upload Poster Template</label>
+  {/* No team dropdown, all team members will receive the poster */}
+
+        <label className="block mb-2 text-sm font-medium text-gray-700">
+          Upload Poster Template
+        </label>
         <input
           type="file"
           accept="image/*"
@@ -89,7 +106,7 @@ const SendPosters: React.FC = () => {
               // `h-auto` maintains the aspect ratio.
               // `object-contain` scales the image to fit within the content box.
               className="max-w-full h-auto object-contain"
-              style={{ maxHeight: '24rem' }} // Set a max-height using inline style for more control (24rem = 384px)
+              style={{ maxHeight: "24rem" }} // Set a max-height using inline style for more control (24rem = 384px)
             />
           </div>
         )}
@@ -99,7 +116,7 @@ const SendPosters: React.FC = () => {
           className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           disabled={loading}
         >
-          {loading ? 'Sending...' : 'Send Posters'}
+          {loading ? "Sending..." : "Send Posters"}
         </button>
       </form>
 

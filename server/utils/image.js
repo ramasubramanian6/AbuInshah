@@ -9,7 +9,7 @@ const fs = require('fs');
  * - Text remains vertically centered within the footer area.
  * - Adjusted vertical spacing for the text block to have equal space above and below.
  */
-function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fontSize) {
+function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fontSize, isTeamName = false) {
   // Add more vertical space between lines for clarity
   const totalLines = 4;
   const lineHeight = Math.round(fontSize * 1.5); // Increased line height for more space
@@ -31,7 +31,10 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
     return `${d.replace(/\s+/g, ' ').trim()} | WealthPlus`;
   };
 
-  const formattedDesignation = normalizeDesignation(designation || '');
+  // If this is a team name, show it exactly as entered by the user without appending '| WealthPlus'
+  const formattedDesignation = isTeamName
+    ? (String(designation || '').trim())
+    : normalizeDesignation(designation || '');
 
   // Escape XML special chars for SVG
   const escapeXml = (unsafe) => String(unsafe)
@@ -112,6 +115,21 @@ async function processCircularImage(inputPath, outputPath, size) {
  */
 async function createFinalPoster({ templatePath, person, logoPath, outputPath }) {
   try {
+    // Debug: dump incoming person and paths to investigate missing-field errors
+    try {
+      console.log('DEBUG createFinalPoster input -> templatePath:', templatePath);
+      console.log('DEBUG createFinalPoster input -> logoPath:', logoPath);
+      console.log('DEBUG createFinalPoster input -> outputPath:', outputPath);
+      console.log('DEBUG createFinalPoster input -> person (raw):', person);
+      if (person) {
+        console.log('DEBUG person fields -> name:', person.name, 'type:', typeof person.name);
+        console.log('DEBUG person fields -> photo:', person.photo, 'type:', typeof person.photo);
+        console.log('DEBUG person fields -> designation:', person.designation, 'type:', typeof person.designation);
+        console.log('DEBUG person fields -> phone:', person.phone, 'type:', typeof person.phone);
+      }
+    } catch (dE) {
+      console.warn('DEBUG logging failed inside createFinalPoster:', dE && dE.message ? dE.message : dE);
+    }
     // Validate inputs
     if (!templatePath || !person || !logoPath || !outputPath) {
       throw new Error('Missing required parameters');
@@ -166,13 +184,16 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
   const footerHeight = Math.max(photoSize, requiredTextHeight, logoSize) + 18;
 
   // Always use the exact designation from person.designation (as filtered by send-posters)
+  // If person has a teamName, treat the designation as a team name and display only that
+  const isTeamName = Boolean(person.teamName && String(person.teamName).trim());
   const footerSVG = generateFooterSVG(
     person.name,
-    person.designation,
+    isTeamName ? person.teamName : person.designation,
     person.phone,
     textWidth,
     footerHeight,
-    fontSize
+    fontSize,
+    isTeamName
   );
 
   const textBuffer = await sharp(Buffer.from(footerSVG)).png().toBuffer();

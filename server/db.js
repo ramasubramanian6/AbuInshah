@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema({
   email: String,
   phone: String,
   designation: String,
+  teamName: String, // Added for team support
   photoUrl: String,
   photo: String
 }, { timestamps: true });

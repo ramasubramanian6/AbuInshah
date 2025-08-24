@@ -7,10 +7,11 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const allowedOrigins = [
   'https://abuinshah.netlify.app',
-  'http://localhost:5173'  // Remove trailing slash
+  'http://localhost:5173'
 ];
 
 const path = require('path');
+const crypto = require('crypto');
 
 const { getMembersByDesignation } = require('./utils/excel');
 const { processCircularImage, generateFooterSVG, createFinalPoster } = require('./utils/image');
@@ -24,10 +25,10 @@ const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 
 // Create necessary directories if they don't exist
 [UPLOADS_DIR, OUTPUT_DIR].forEach(dir => {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
-const upload = multer({ 
+const upload = multer({
   dest: UPLOADS_DIR,
   limits: { fileSize: 5 * 1024 * 1024 }
 });
@@ -35,9 +36,8 @@ const upload = multer({
 // Move CORS configuration before routes
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     if (allowedOrigins.indexOf(origin) === -1) {
       return callback(new Error('CORS policy violation'), false);
     }
@@ -53,6 +53,7 @@ app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
 
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../client/dist')));
+app.use(express.static(path.join(__dirname, 'uploads')));
 
 app.use((err, req, res, next) => {
   console.error('Server Error:', err);
@@ -74,6 +75,16 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
+app.get('/api/teams', async (req, res) => {
+  try {
+    const teams = await db.User.distinct('teamName', { teamName: { $exists: true, $ne: '' } });
+    res.json(teams);
+  } catch (error) {
+    console.error('Fetch teams error:', error);
+    res.status(500).json({ error: 'Failed to fetch teams' });
+  }
+});
+
 app.delete('/api/users/:id', async (req, res) => {
   try {
     const user = await db.getUser(req.params.id);
@@ -90,7 +101,7 @@ app.delete('/api/users/:id', async (req, res) => {
 
 app.post('/api/register', upload.single('photo'), async (req, res) => {
   try {
-    const { name, phone, email, designation } = req.body;
+    const { name, phone, email, designation, teamName } = req.body;
     if (!name || !phone || !email || !designation) {
       return res.status(400).json({ error: 'All fields are required' });
     }
@@ -99,14 +110,15 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
     }
 
     const filenameSafe = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const finalPhotoPath = `uploads/${filenameSafe}_${Date.now()}.jpeg`;
+    const finalPhotoPath = path.join(UPLOADS_DIR, `${filenameSafe}_${Date.now()}.jpeg`);
+    
     try {
       if (!fs.existsSync(req.file.path)) throw new Error('Uploaded file not found');
       await processCircularImage(req.file.path, finalPhotoPath, 200);
       if (!fs.existsSync(finalPhotoPath)) throw new Error('Failed to save processed image');
-  try { await fs.promises.unlink(req.file.path); } catch (e) { console.warn('Cleanup error (ignored):', e.message || e); }
+      try { await fs.promises.unlink(req.file.path); } catch (e) { console.warn('Cleanup error (ignored):', e.message || e); }
     } catch (err) {
-      console.error('Image processing failed:', err);
+      console.error('Image processing failed, falling back:', err);
       try {
         if (fs.existsSync(req.file.path)) fs.renameSync(req.file.path, finalPhotoPath);
         else throw new Error('No valid image file available');
@@ -115,21 +127,26 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
       }
     }
 
+    const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
+
     try {
       if (designation && designation.toLowerCase() === 'both') {
-          const id1 = Date.now().toString();
-          const userData1 = { id: id1, name, phone, email, designation: 'Health Insurance Advisor', photoUrl: `/${finalPhotoPath}` };
-          const id2 = (Date.now() + 1).toString();
-          const userData2 = { id: id2, name, phone, email, designation: 'Wealth Manager', photoUrl: `/${finalPhotoPath}` };
-          await db.createUser(userData1);
-          await db.createUser(userData2);
-          res.json({ success: true, message: '✅ Two profiles registered successfully', users: [userData1, userData2] });
-        } else {
-          const id = Date.now().toString();
-          const userData = { id, name, phone, email, designation, photoUrl: `/${finalPhotoPath}` };
-          await db.createUser(userData);
-          res.json({ success: true, message: '✅ Member registered successfully', user: userData });
-        }
+        const id1 = Date.now().toString();
+        const userData1 = { id: id1, name, phone, email, designation: 'Health Insurance Advisor', photoUrl };
+        if (teamName) userData1.teamName = teamName;
+        const id2 = (Date.now() + 1).toString();
+        const userData2 = { id: id2, name, phone, email, designation: 'Wealth Manager', photoUrl };
+        if (teamName) userData2.teamName = teamName;
+        await db.createUser(userData1);
+        await db.createUser(userData2);
+        res.json({ success: true, message: '✅ Two profiles registered successfully', users: [userData1, userData2] });
+      } else {
+        const id = Date.now().toString();
+        const userData = { id, name, phone, email, designation, photoUrl };
+        if (teamName) userData.teamName = teamName;
+        await db.createUser(userData);
+        res.json({ success: true, message: '✅ Member registered successfully', user: userData });
+      }
     } catch (err) {
       if (err.message && err.message.includes('duplicate key')) {
         return res.status(400).json({ error: 'Duplicate entry' });
@@ -144,94 +161,116 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
 
 app.post('/api/send-posters', upload.single('template'), async (req, res) => {
   try {
-    const { designation } = req.body;
+    const { designation, teamName } = req.body;
     if (!req.file) return res.status(400).json({ error: 'Template image is required' });
     const templatePath = req.file.path;
 
-    // Standardize designations and ensure correct format
-    let designationsToSend = [];
-    if (designation.toLowerCase() === 'both') {
-      designationsToSend = ['Health Insurance Advisor', 'Wealth Manager'];
-    } else if (designation.toLowerCase().includes('health')) {
-      designationsToSend = ['Health Insurance Advisor'];
-    } else if (designation.toLowerCase().includes('wealth')) {
-      designationsToSend = ['Wealth Manager'];
-    } else if (designation.toLowerCase().includes('partner')) {
-      designationsToSend = ['Partner'];
+    let recipients = [];
+      if (designation.toLowerCase() === 'team') {
+        recipients = await db.User.find({
+          teamName: { $exists: true, $ne: '' },
+          email: { $exists: true, $ne: '' },
+          photoUrl: { $exists: true, $ne: '' }
+        });
     } else {
-      designationsToSend = [designation];
-    }
-
-    let totalRecipients = 0;
-    for (const desig of designationsToSend) {
-      // Use case-insensitive search but maintain correct designation format in output
-  const recipients = (await db.findMembersByDesignation(desig)).map(recipient => ({ ...recipient, designation: desig }));
-
-      if (!recipients.length) continue;
-      totalRecipients += recipients.length;
+      let designationsToSend = [];
+      if (designation.toLowerCase() === 'both') {
+        designationsToSend = ['Health Insurance Advisor', 'Wealth Manager'];
+      } else if (designation.toLowerCase().includes('health')) {
+        designationsToSend = ['Health Insurance Advisor'];
+      } else if (designation.toLowerCase().includes('wealth')) {
+        designationsToSend = ['Wealth Manager'];
+      } else if (designation.toLowerCase().includes('partner')) {
+        designationsToSend = ['Partner'];
+      } else {
+        designationsToSend = [designation];
+      }
       
-      for (const person of recipients) {
-        const finalImagePath = path.join(OUTPUT_DIR, `final_${Date.now()}_${person.name.replace(/\s+/g, '_')}.jpeg`);
-        try {
-          // Get the correct photo path
-          let photoPath = person.photo;
-          
-          // If it's a relative path, make it absolute
-          if (photoPath && !path.isAbsolute(photoPath)) {
-            // If it starts with uploads/, it's relative to server root
-            if (photoPath.startsWith('uploads/')) {
-              photoPath = path.join(__dirname, photoPath);
-            } else {
-              photoPath = path.join(UPLOADS_DIR, photoPath);
-            }
-          }
-
-          // Try photoUrl if photo path is not valid
-          if (!photoPath && person.photoUrl) {
-            photoPath = path.join(UPLOADS_DIR, path.basename(person.photoUrl));
-          }
-
-          if (!photoPath || !fs.existsSync(photoPath)) {
-            throw new Error(`Invalid or missing photo for ${person.name}. Checked paths: ${person.photo}, ${photoPath}`);
-          }
-
-          await createFinalPoster({
-            templatePath,
-            person: {
-              ...person,
-              photo: photoPath
-            },
-            logoPath: LOGO_PATH,
-            outputPath: finalImagePath
-          });
-
-          await sendEmail({
-            Name: person.name,
-            Email: person.email,
-            Phone: person.phone,
-            Designation: person.designation
-          }, finalImagePath);
-
-          // Clean up the generated image
-          try {
-            await fs.promises.unlink(finalImagePath);
-          } catch (e) {
-            console.warn(`Cleanup failed for ${person.name}'s image (ignored):`, e.message);
-          }
-        } catch (err) {
-          console.error(`Failed for ${person.name}:`, err);
-          continue; // Continue with next person even if one fails
-        }
+      for (const desig of designationsToSend) {
+        const found = await db.findMembersByDesignation(desig);
+        recipients = recipients.concat(found);
       }
     }
 
-  try { fs.unlinkSync(templatePath); } catch (e) { console.warn('Template cleanup failed (ignored):', e.message || e); }
-
-    if (totalRecipients === 0) {
+    if (recipients.length === 0) {
+      try { fs.unlinkSync(templatePath); } catch (e) { /* ignore cleanup error */ }
       return res.status(404).json({ error: `No recipients found for designation: ${designation}` });
     }
 
-    res.json({ success: true, message: '✅ Posters sent successfully', recipientCount: totalRecipients });
+    let successfulRecipients = 0;
+    for (const person of recipients) {
+      const finalImagePath = path.join(OUTPUT_DIR, `final_${Date.now()}_${person.name.replace(/\s+/g, '_')}.jpeg`);
+      
+      try {
+        let photoPath = path.join(__dirname, person.photoUrl || person.photo || '');
+        if (!photoPath || !fs.existsSync(photoPath)) {
+          console.warn(`Skipping poster for ${person.name}: Invalid or missing photo.`);
+          continue;
+        }
+
+        // For team users, set designation to the most specific 'Team: ...' value if present
+        let designation = person.designation;
+        if (designation && designation.includes('Team:')) {
+          // Use the last 'Team: ...' in the string
+          const matches = designation.match(/Team: ([^,]+)/g);
+          if (matches && matches.length > 0) {
+            designation = matches[matches.length - 1];
+          }
+        }
+
+        // Debug logging
+        console.log('DEBUG createFinalPoster:', {
+          name: person.name,
+          photo: photoPath,
+          designation,
+          teamName: person.teamName,
+          email: person.email
+        });
+
+        // Build a plain object to avoid passing Mongoose document with non-enumerable props
+        const personForPoster = {
+          id: person.id || person._id || '',
+          name: person.name || '',
+          email: person.email || '',
+          phone: person.phone || '',
+          designation: designation || person.designation || '',
+          teamName: person.teamName || '',
+          photo: photoPath
+        };
+
+        await createFinalPoster({
+          templatePath,
+          person: personForPoster,
+          logoPath: LOGO_PATH,
+          outputPath: finalImagePath
+        });
+
+        await sendEmail({
+          Name: person.name,
+          Email: person.email,
+          Phone: person.phone,
+          Designation: person.designation
+        }, finalImagePath);
+        
+        successfulRecipients++;
+
+      } catch (err) {
+        console.error(`Failed to generate/send poster for ${person.name}:`, err.message);
+        // Clean up any partially created files for this recipient
+        try { await fs.promises.unlink(finalImagePath); } catch (e) { /* ignore */ }
+      } finally {
+        // Ensure the final image is cleaned up after each attempt
+        try { await fs.promises.unlink(finalImagePath); } catch (e) { /* ignore */ }
+      }
+    }
+
+    try {
+      fs.unlinkSync(templatePath);
+    } catch (e) {
+      console.warn('Template cleanup failed (ignored):', e.message || e);
+    }
+
+    res.json({ success: true, message: `✅ Posters sent to ${successfulRecipients} recipients.`, recipientCount: successfulRecipients });
   } catch (error) {
     console.error('Send posters error:', error);
     res.status(500).json({ error: 'Failed to send posters', details: error.message });
@@ -243,19 +282,16 @@ const ADMIN_TOKEN_SECRET = process.env.ADMIN_TOKEN_SECRET || 'supersecret';
 const ADMIN_COOKIE_NAME = 'admin_token';
 const ADMIN_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true, // must be true for cross-site cookies
-  sameSite: 'none', // must be 'none' for cross-site cookies
+  secure: true,
+  sameSite: 'none',
   maxAge: 24 * 60 * 60 * 1000,
   signed: true,
 };
-
-const crypto = require('crypto');
 
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// Admin authorization middleware used by endpoints that require admin access
 function isAdmin(req, res, next) {
   const isAdminQuery = req.query.isAdmin === 'true';
   const token = req.signedCookies && req.signedCookies[ADMIN_COOKIE_NAME];
@@ -263,7 +299,6 @@ function isAdmin(req, res, next) {
   return res.status(403).json({ error: 'Admin access required' });
 }
 
-// Admin login: set secure cookie
 app.post('/api/admin-login', (req, res) => {
   const { username, password } = req.body;
   const validUsername = process.env.ADMIN_USERNAME;
@@ -279,7 +314,6 @@ app.post('/api/admin-login', (req, res) => {
   }
 });
 
-// Admin auth check: verify cookie
 app.get('/api/admin-auth', (req, res) => {
   const token = req.signedCookies[ADMIN_COOKIE_NAME];
   if (token) {
@@ -289,7 +323,6 @@ app.get('/api/admin-auth', (req, res) => {
   }
 });
 
-// Admin logout: clear cookie
 app.post('/api/admin/logout', (req, res) => {
   res.clearCookie(ADMIN_COOKIE_NAME, { ...ADMIN_COOKIE_OPTIONS, maxAge: 0 });
   res.json({ success: true });
@@ -302,7 +335,6 @@ app.put('/api/users/:id', async (req, res) => {
     if (!id || !name || !email || !phone || !designation) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    // prevent duplicate email
     const existing = await db.User.findOne({ email });
     if (existing && existing.id !== id) {
       return res.status(400).json({ error: 'Email already in use by another user' });
@@ -316,7 +348,6 @@ app.put('/api/users/:id', async (req, res) => {
   }
 });
 
-// Admin helper: create user via JSON (no photo) for quick testing
 app.post('/api/admin/users', async (req, res) => {
   try {
     const { id, name, email, phone, designation } = req.body;
@@ -332,12 +363,11 @@ app.post('/api/admin/users', async (req, res) => {
   }
 });
 
-// Admin endpoint: run photo -> photoUrl migration on demand
 app.post('/api/admin/migrate-photo', isAdmin, async (req, res) => {
   try {
     const users = await db.User.find({
       $and: [
-        { $or: [ { photoUrl: { $exists: false } }, { photoUrl: '' }, { photoUrl: null } ] },
+        { $or: [{ photoUrl: { $exists: false } }, { photoUrl: '' }, { photoUrl: null }] },
         { photo: { $exists: true, $ne: '' } }
       ]
     }).lean();
@@ -347,7 +377,7 @@ app.post('/api/admin/migrate-photo', isAdmin, async (req, res) => {
       const val = u.photo || '';
       if (!val) continue;
       const photoUrl = val.startsWith('/') ? val : `/${val}`;
-      try { await db.updateUser(u.id, { ...u, photoUrl }); updated++; } catch(e) { console.warn('skip', u.id, e.message); }
+      try { await db.updateUser(u.id, { ...u, photoUrl }); updated++; } catch (e) { console.warn('skip', u.id, e.message); }
     }
 
     res.json({ success: true, updated });
@@ -357,7 +387,6 @@ app.post('/api/admin/migrate-photo', isAdmin, async (req, res) => {
   }
 });
 
-// Admin: replace existing user's photo
 app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -366,27 +395,24 @@ app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res
     const user = await db.getUser(id);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // build a safe filename based on user name or id
     const filenameSafe = (user.name || id).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const finalPhotoPath = `uploads/${filenameSafe}_${Date.now()}.jpeg`;
+    const finalPhotoPath = path.join(UPLOADS_DIR, `${filenameSafe}_${Date.now()}.jpeg`);
 
     try {
       await processCircularImage(req.file.path, finalPhotoPath, 200);
       try { await fs.promises.unlink(req.file.path); } catch (e) { /* ignore cleanup error */ }
     } catch (err) {
-      // fallback: move original upload into final location
       try { await fs.promises.rename(req.file.path, finalPhotoPath); } catch (e) { console.warn('Fallback save failed:', e.message || e); }
     }
 
-    // delete previous photo file if exists
     const oldPhoto = user.photoUrl || user.photo || '';
     if (oldPhoto) {
       const oldPath = path.join(__dirname, oldPhoto.startsWith('/') ? oldPhoto.slice(1) : oldPhoto);
       try { await fs.promises.unlink(oldPath); } catch (e) { console.warn('Old photo unlink failed (ignored):', e.message || e); }
     }
 
-    const photoUrl = `/${finalPhotoPath}`;
-    await db.updateUser(id, { ...user, photoUrl, photo: finalPhotoPath });
+    const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
+    await db.updateUser(id, { photoUrl, photo: photoUrl }); // Store both for backward compatibility
 
     res.json({ success: true, photoUrl });
   } catch (err) {
@@ -395,12 +421,9 @@ app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res
   }
 });
 
-// Health check endpoint to test if backend is live
 app.get('/api/ping', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is live!' });
 });
-
-// Excel export removed: endpoint disabled per configuration
 
 const PORT = process.env.PORT || 3001;
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;

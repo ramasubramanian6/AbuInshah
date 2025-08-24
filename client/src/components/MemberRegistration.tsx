@@ -10,9 +10,10 @@ const MemberRegistration = () => {
     phone: '',
     email: '',
     designation: [] as string[],
+    teamName: '', // ✅ added teamName
     photo: null as File | null,
   });
-  
+
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [srcImage, setSrcImage] = useState('');
   const [crop, setCrop] = useState<Crop>({
@@ -23,65 +24,37 @@ const MemberRegistration = () => {
   const [completedCrop, setCompletedCrop] = useState<any>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const imgRef = useRef<HTMLImageElement>(null);
-
-  const [loading, setLoading] = useState(false);
-
-  const getCroppedImage = async (image: HTMLImageElement, crop: any) => {
+  // Helper to crop image and return a Blob
+  const getCroppedImg = async (image: HTMLImageElement, crop: Crop): Promise<Blob | null> => {
+    if (!crop.width || !crop.height) return null;
     const canvas = document.createElement('canvas');
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
     canvas.width = crop.width;
     canvas.height = crop.height;
     const ctx = canvas.getContext('2d');
-
-    if (ctx) {
-      ctx.drawImage(
-        image,
-        crop.x * scaleX,
-        crop.y * scaleY,
-        crop.width * scaleX,
-        crop.height * scaleY,
-        0,
-        0,
-        crop.width,
-        crop.height
-      );
-
-      return new Promise<File>((resolve) => {
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const file = new File([blob], 'cropped-image.jpg', {
-              type: 'image/jpeg',
-            });
-            resolve(file);
-          }
-        }, 'image/jpeg', 1);
-      });
-    }
-    throw new Error('Could not get canvas context');
+    if (!ctx) return null;
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height
+    );
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        resolve(blob);
+      }, 'image/jpeg', 0.95);
+    });
   };
 
-  const handleCropComplete = async () => {
-    if (imgRef.current && completedCrop?.width && completedCrop?.height) {
-      try {
-        const croppedImage = await getCroppedImage(imgRef.current, completedCrop);
-        setFormData({ ...formData, photo: croppedImage });
-        
-        // Create preview URL
-        const reader = new FileReader();
-        reader.onload = () => {
-          setPreviewUrl(reader.result as string);
-        };
-        reader.readAsDataURL(croppedImage);
-        
-        setCropModalVisible(false);
-        setSrcImage('');
-      } catch (error) {
-        message.error('Failed to crop image');
-      }
-    }
-  };
+  const [loading, setLoading] = useState(false);
 
+  // handle input change
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -100,18 +73,15 @@ const MemberRegistration = () => {
       if (value === 'Both') {
         setFormData({
           ...formData,
-          designation: ['Health insurance advisor', 'Wealth Manager'],
+          designation: ['Team'], // ✅ mark as Team
         });
       } else {
-        setFormData({ ...formData, designation: [value] });
+        setFormData({ ...formData, designation: [value], teamName: '' });
       }
     } else {
       setFormData({ ...formData, [name]: value });
     }
   };
-
-  const validateEmail = (email: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,12 +93,21 @@ const MemberRegistration = () => {
         return;
       }
 
+      // Always save teamName as a separate field if present
+      let finalDesignation = [...formData.designation];
+      if (formData.designation.includes('Team') && formData.teamName) {
+        finalDesignation.push(`Team: ${formData.teamName}`);
+      }
+
       const data = new FormData();
       data.append('name', formData.name.trim());
       data.append('phone', formData.phone.trim());
       data.append('email', formData.email.trim());
-      data.append('designation', formData.designation.join(','));
+      data.append('designation', finalDesignation.join(','));
       data.append('photo', formData.photo);
+      if (formData.teamName) {
+        data.append('teamName', formData.teamName.trim());
+      }
 
       const API_URL = import.meta.env.VITE_API_URL;
       const res = await fetch(`${API_URL}api/register`, {
@@ -148,6 +127,7 @@ const MemberRegistration = () => {
         phone: '',
         email: '',
         designation: [],
+        teamName: '', // reset
         photo: null,
       });
       setPreviewUrl('');
@@ -178,7 +158,7 @@ const MemberRegistration = () => {
 
           <input
             name="phone"
-            type="Number"
+            type="number"
             value={formData.phone}
             placeholder="Phone Number"
             onChange={handleInputChange}
@@ -199,13 +179,12 @@ const MemberRegistration = () => {
           <select
             name="designation"
             value={
-              formData.designation.length === 2
+              formData.designation.includes('Team')
                 ? 'Both'
                 : formData.designation[0] || ''
             }
             onChange={handleInputChange}
             className="w-full max-w-[220px] text-sm p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 mx-auto md:text-base md:max-w-full"
-            style={{ maxWidth: 220 }}
           >
             <option value="">Select Designation</option>
             <option value="Health insurance advisor">
@@ -213,9 +192,22 @@ const MemberRegistration = () => {
             </option>
             <option value="Wealth Manager">Wealth Manager</option>
             <option value="Partner">Partner</option>
-            <option value="Both">Health & Life </option>
+            <option value="Both">Team</option>
           </select>
 
+          {/* ✅ Show Team Name field only if Team is selected */}
+          {formData.designation.includes('Team') && (
+            <input
+              name="teamName"
+              type="text"
+              value={formData.teamName}
+              placeholder="Enter Team Name"
+              onChange={handleInputChange}
+              className="w-full p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          )}
+
+          {/* Upload section unchanged */}
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 cursor-pointer text-blue-600 font-medium">
@@ -264,10 +256,22 @@ const MemberRegistration = () => {
         </div>
       </div>
 
+      {/* Crop Modal */}
       <Modal
         title="Crop Image"
         open={cropModalVisible}
-        onOk={handleCropComplete}
+        onOk={async () => {
+          if (imgRef.current && completedCrop) {
+            const blob = await getCroppedImg(imgRef.current, completedCrop);
+            if (blob) {
+              const croppedFile = new File([blob], 'cropped.jpg', { type: 'image/jpeg' });
+              setFormData((prev) => ({ ...prev, photo: croppedFile }));
+              setPreviewUrl(URL.createObjectURL(blob));
+            }
+          }
+          setCropModalVisible(false);
+          setSrcImage('');
+        }}
         onCancel={() => {
           setCropModalVisible(false);
           setSrcImage('');
