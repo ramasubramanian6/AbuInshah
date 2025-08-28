@@ -7,7 +7,8 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const allowedOrigins = [
   'https://abuinshah.netlify.app',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'https://abuinshah-1.onrender.com'
 ];
 
 const path = require('path');
