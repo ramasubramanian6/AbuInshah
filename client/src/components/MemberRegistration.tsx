@@ -70,7 +70,7 @@ const MemberRegistration = () => {
         reader.readAsDataURL(files[0]);
       }
     } else if (name === 'designation') {
-      if (value === 'Both') {
+      if (value === 'Team') {
         setFormData({
           ...formData,
           designation: ['Team'], // ✅ mark as Team
@@ -180,19 +180,17 @@ const MemberRegistration = () => {
             name="designation"
             value={
               formData.designation.includes('Team')
-                ? 'Both'
+                ? 'Team'
                 : formData.designation[0] || ''
             }
             onChange={handleInputChange}
             className="w-full max-w-[220px] text-sm p-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 mx-auto md:text-base md:max-w-full"
           >
             <option value="">Select Designation</option>
-            <option value="Health insurance advisor">
-              Health insurance advisor
-            </option>
-            <option value="Wealth Manager">Wealth Manager</option>
             <option value="Partner">Partner</option>
-            <option value="Both">Team</option>
+            <option value="Admin">Admin</option>
+            <option value="Founder">Founder</option>
+            <option value="Team">Team</option>
           </select>
 
           {/* ✅ Show Team Name field only if Team is selected */}

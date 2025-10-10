@@ -38,7 +38,7 @@ const Navbar = () => {
             <NavLink to="/" label="Home" active={location.pathname === '/'} />
             <NavLink to="/send-poster" label="Send Poster" active={location.pathname === '/send-poster'} />
             <NavLink to="/register" label="Register Member" active={location.pathname === '/register'} />
-            
+
           </div>
           <div className="md:hidden flex items-center">
             <button
@@ -58,7 +58,7 @@ const Navbar = () => {
           <NavLink to="/" label="Home" active={location.pathname === '/'} onClick={() => setOpen(false)} />
           <NavLink to="/send-poster" label="Send Poster" active={location.pathname === '/send-poster'} onClick={() => setOpen(false)} />
           <NavLink to="/register" label="Register Member" active={location.pathname === '/register'} onClick={() => setOpen(false)} />
-          
+
         </div>
       )}
     </nav>

@@ -48,8 +48,9 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
   const lines = [
     String(name || ''),
     formattedDesignation,
+    `✔️ Investments ✔️ Insurance ✔️ Properties`,
     `Phone: ${String(phone || '')}`,
-    'IRDAI Certified Insurance Advisor'
+
   ].map(l => escapeXml(l));
 
   // Estimate character width (~0.55 * fontSize) and reduce font size until fits

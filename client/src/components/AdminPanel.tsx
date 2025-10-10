@@ -27,10 +27,10 @@ type ImageModalState = {
 
 type DashboardStats = {
   totalUsers: number;
-  healthAdvisors: number;
-  wealthManagers: number;
   partners: number;
   teamMembers: number;
+  admins: number;
+  founders: number;
   designatedUsers: number;
 };
 
@@ -75,15 +75,15 @@ const AdminPanel: React.FC = () => {
   const [searchEmail, setSearchEmail] = useState('');
   const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
     totalUsers: 0,
-    healthAdvisors: 0,
-    wealthManagers: 0,
     partners: 0,
     teamMembers: 0,
+    admins: 0,
+    founders: 0,
     designatedUsers: 0,
   });
 
-  // Active filter for the list (all | health | wealth | partner | team)
-  const [activeFilter, setActiveFilter] = useState<'all' | 'health' | 'wealth' | 'partner' | 'team'>('all');
+  // Active filter for the list (all | partner | team | admin | founder)
+  const [activeFilter, setActiveFilter] = useState<'all' | 'partner' | 'team' | 'admin' | 'founder'>('all');
 
   // Backend status
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'pinging'>('pinging');
@@ -131,18 +131,18 @@ const AdminPanel: React.FC = () => {
     const acc = usersList.reduce(
       (accum, user) => {
         const designations = (user.designation || '').split(',').map(d => d.trim());
-        const isHa = designations.includes('Health insurance advisor');
-        const isWm = designations.includes('Wealth Manager');
         const isPartner = designations.includes('Partner');
-        if (isHa) accum.healthAdvisors += 1;
-        if (isWm) accum.wealthManagers += 1;
+        const isAdmin = designations.includes('Admin');
+        const isFounder = designations.includes('Founder');
         if (isPartner) accum.partners += 1;
-        if (isHa || isWm || isPartner) accum.designatedUsers += 1;
+        if (isAdmin) accum.admins += 1;
+        if (isFounder) accum.founders += 1;
+        if (isPartner || isAdmin || isFounder) accum.designatedUsers += 1;
         // teamMembers counted when user has a non-empty teamName
         if (user.teamName && user.teamName.trim() !== '') accum.teamMembers += 1;
         return accum;
       },
-      { healthAdvisors: 0, wealthManagers: 0, partners: 0, teamMembers: 0, designatedUsers: 0 }
+      { partners: 0, teamMembers: 0, admins: 0, founders: 0, designatedUsers: 0 }
     );
     setDashboardStats({ ...acc, totalUsers: usersList.length });
   }, []);
@@ -162,7 +162,7 @@ const AdminPanel: React.FC = () => {
       setError(null);
     } catch (err) {
       setUsers([]);
-    setDashboardStats({ totalUsers: 0, healthAdvisors: 0, wealthManagers: 0, partners: 0, teamMembers: 0, designatedUsers: 0 });
+    setDashboardStats({ totalUsers: 0, partners: 0, teamMembers: 0, admins: 0, founders: 0, designatedUsers: 0 });
       const msg = err instanceof Error ? err.message : 'Failed to fetch users. Please try again later.';
       setError(msg);
       if (msg === 'Please login again') navigate('/admin-login');
@@ -405,28 +405,28 @@ const AdminPanel: React.FC = () => {
             <div className="flex flex-col gap-2 col-span-2">
             <MobileDashboardCard title="Total Users" value={loading ? '-' : dashboardStats.totalUsers} icon="👥" />
           </div>
-          <MobileDashboardCard title="Health Advisors" value={loading ? '-' : dashboardStats.healthAdvisors} icon="⚕️" />
-          <MobileDashboardCard title="Wealth Managers" value={loading ? '-' : dashboardStats.wealthManagers} icon="📈" />
           <MobileDashboardCard title="Team Members" value={loading ? '-' : dashboardStats.teamMembers} icon="🧑‍🤝‍🧑" onClick={() => { setActiveFilter('team'); setActiveTab('list'); }} />
           <MobileDashboardCard title="Partners" value={loading ? '-' : dashboardStats.partners} icon="🤝" />
+          <MobileDashboardCard title="Admins" value={loading ? '-' : dashboardStats.admins} icon="👑" />
+          <MobileDashboardCard title="Founders" value={loading ? '-' : dashboardStats.founders} icon="🏆" />
           <MobileDashboardCard title="Designated" value={loading ? '-' : dashboardStats.designatedUsers} icon="🎯" />
         </>
       ) : (
         <>
           <div className="col-span-2 lg:col-span-1">
-            <DesktopDashboardCard 
-              title="Total Users" 
-              value={loading ? '-' : dashboardStats.totalUsers} 
+            <DesktopDashboardCard
+              title="Total Users"
+              value={loading ? '-' : dashboardStats.totalUsers}
               description={
                 <div className="mt-2">{/* export removed */}</div>
-              } 
-              icon="👥" 
+              }
+              icon="👥"
             />
           </div>
-          <DesktopDashboardCard title="Health Advisors" value={loading ? '-' : dashboardStats.healthAdvisors} description="Health Insurance Advisors" icon="⚕️" />
-          <DesktopDashboardCard title="Wealth Managers" value={loading ? '-' : dashboardStats.wealthManagers} description="Wealth Management Team" icon="📈" />
           <DesktopDashboardCard title="Team Members" value={loading ? '-' : dashboardStats.teamMembers} description="Members registered with a team" icon="🧑‍🤝‍🧑" />
           <DesktopDashboardCard title="Partners" value={loading ? '-' : dashboardStats.partners} description="Business Partners" icon="🤝" />
+          <DesktopDashboardCard title="Admins" value={loading ? '-' : dashboardStats.admins} description="Administrative Staff" icon="👑" />
+          <DesktopDashboardCard title="Founders" value={loading ? '-' : dashboardStats.founders} description="Company Founders" icon="🏆" />
           <DesktopDashboardCard title="Designated Users" value={loading ? '-' : dashboardStats.designatedUsers} description="Users with specific roles" icon="🎯" />
         </>
       )}
@@ -468,9 +468,9 @@ const AdminPanel: React.FC = () => {
       if (activeFilter === 'all') return true;
       if (activeFilter === 'team') return !!(user.teamName && user.teamName.trim() !== '');
       const designations = (user.designation || '').split(',').map(d => d.trim());
-      if (activeFilter === 'health') return designations.includes('Health insurance advisor');
-      if (activeFilter === 'wealth') return designations.includes('Wealth Manager');
       if (activeFilter === 'partner') return designations.includes('Partner');
+      if (activeFilter === 'admin') return designations.includes('Admin');
+      if (activeFilter === 'founder') return designations.includes('Founder');
       return true;
     });
 
@@ -670,10 +670,9 @@ const AdminPanel: React.FC = () => {
               required
             >
               <option value="">Select Designation</option>
-              <option value="Health insurance advisor">Health Insurance Advisor</option>
-              <option value="Wealth Manager">Wealth Manager</option>
               <option value="Partner">Partner</option>
-              <option value="Health insurance advisor,Wealth Manager">Both Roles</option>
+              <option value="Admin">Admin</option>
+              <option value="Founder">Founder</option>
             </select>
           </div>
           <div className="space-y-2">
@@ -815,10 +814,10 @@ const AdminPanel: React.FC = () => {
                 {/* Filters */}
                 <div className="flex items-center gap-2 mb-4">
                   <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('all')}>All</button>
-                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'health' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('health')}>Health</button>
-                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'wealth' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('wealth')}>Wealth</button>
                   <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'team' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('team')}>Team</button>
                   <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'partner' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('partner')}>Partners</button>
+                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'admin' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('admin')}>Admin</button>
+                  <button className={`px-3 py-1 rounded-full text-sm ${activeFilter === 'founder' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`} onClick={() => setActiveFilter('founder')}>Founder</button>
                 </div>
 
                 {renderUserListContent()}

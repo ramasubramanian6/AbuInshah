@@ -4,7 +4,7 @@ const SendPosters: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [designation, setDesignation] = useState<string>(
-    "Health insurance advisor"
+    "Partner"
   );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -75,12 +75,10 @@ const SendPosters: React.FC = () => {
             setDesignation(e.target.value);
           }}
         >
-          <option value="Health insurance advisor">
-            Health insurance advisor
-          </option>
-          <option value="Wealth Manager">Wealth Manager</option>
           <option value="Partner">Partner</option>
-          <option value="Team">Team</option> {/* ✅ New option added */}
+          <option value="Admin">Admin</option>
+          <option value="Founder">Founder</option>
+          <option value="Team">Team</option>
         </select>
 
   {/* No team dropdown, all team members will receive the poster */}
