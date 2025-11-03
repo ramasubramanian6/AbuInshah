@@ -1,5 +1,5 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['build', '-t', 'gcr.io/$PROJECT_ID/abu-inshah-server', '-f', 'server/Dockerfile', 'server/']
+  args: ['build', '-t', 'gcr.io/$PROJECT_ID/abu-inshah-server', '-f', 'server/Dockerfile', '.']
 images:
 - 'gcr.io/$PROJECT_ID/abu-inshah-server'
