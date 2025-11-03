@@ -1,11 +1,9 @@
-FROM node:22
+FROM node:18
 
 WORKDIR /app
 
-USER node
-
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install
 
 COPY . .
 
