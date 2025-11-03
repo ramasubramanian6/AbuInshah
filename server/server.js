@@ -8,7 +8,8 @@ const cookieParser = require('cookie-parser');
 const allowedOrigins = [
   'https://abuinshah.netlify.app',
   'http://localhost:5173',
-  'https://abuinshah-1.onrender.com'
+  'https://abuinshah-1.onrender.com',
+  'https://wealthpluspostermanagementbackend-786760620153.asia-south1.run.app'
 ];
 
 const path = require('path');
