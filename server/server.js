@@ -9,7 +9,8 @@ const allowedOrigins = [
   'https://abuinshah.netlify.app',
   'http://localhost:5173',
   'https://abuinshah-1.onrender.com',
-  'https://wealthpluspostermanagementbackend-786760620153.asia-south1.run.app'
+  'https://wealthpluspostermanagementbackend-786760620153.asia-south1.run.app',
+  'https://wealthplusmanagement-ca4fe.web.app'
 ];
 
 const path = require('path');
