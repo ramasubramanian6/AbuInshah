@@ -466,45 +466,63 @@ app.post('/api/admin/migrate-photo', isAdmin, async (req, res) => {
 });
 
 app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res) => {
+  console.log('DEBUG: Admin photo update started for user ID:', req.params.id);
   try {
     const { id } = req.params;
-    if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
+    if (!req.file) {
+      console.log('DEBUG: No photo uploaded');
+      return res.status(400).json({ error: 'No photo uploaded' });
+    }
+    console.log('DEBUG: File uploaded:', req.file.path, 'size:', req.file.size);
 
     const user = await db.getUser(id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) {
+      console.log('DEBUG: User not found for ID:', id);
+      return res.status(404).json({ error: 'User not found' });
+    }
+    console.log('DEBUG: User found:', user.name);
 
     const filenameSafe = (user.name || id).replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const finalPhotoPath = path.join(UPLOADS_DIR, `${filenameSafe}_${Date.now()}.jpeg`);
+    console.log('DEBUG: Final photo path:', finalPhotoPath);
 
     try {
+      console.log('DEBUG: Starting image processing...');
       await processCircularImage(req.file.path, finalPhotoPath, 200);
+      console.log('DEBUG: Image processing successful');
       try { await fs.promises.unlink(req.file.path); } catch (e) { /* ignore cleanup error */ }
     } catch (err) {
+      console.log('DEBUG: Image processing failed, trying fallback:', err.message);
       try { await fs.promises.rename(req.file.path, finalPhotoPath); } catch (e) { console.warn('Fallback save failed:', e.message || e); }
     }
 
     // Upload processed image to GCS
     const { uploadToGCS } = require('./utils/gcs');
     const gcsFileName = `photos/${Date.now()}_${filenameSafe}.jpeg`;
+    console.log('DEBUG: Starting GCS upload to:', gcsFileName);
     let photoUrl;
     try {
       photoUrl = await uploadToGCS(finalPhotoPath, gcsFileName);
+      console.log('DEBUG: GCS upload successful, URL:', photoUrl);
     } catch (err) {
-      console.error('GCS upload failed:', err);
+      console.error('DEBUG: GCS upload failed:', err);
       // Clean up temp file on failure
       try { await fs.promises.unlink(finalPhotoPath); } catch (e) { /* ignore */ }
       return res.status(500).json({ error: 'Failed to upload photo to cloud storage' });
     }
 
+    console.log('DEBUG: Updating DB for user:', id);
     // Update DB: set photoUrl to GCS URL, clear photo field
     await db.updateUser(id, { photoUrl, photo: '' });
+    console.log('DEBUG: DB update successful');
 
     // Clean up local temp file
     try { await fs.promises.unlink(finalPhotoPath); } catch (e) { console.warn('Local file cleanup failed (ignored):', e.message || e); }
+    console.log('DEBUG: Local file cleanup done');
 
     res.json({ success: true, photoUrl });
   } catch (err) {
-    console.error('Admin photo update error:', err);
+    console.error('DEBUG: Admin photo update error:', err);
     res.status(500).json({ error: 'Failed to update photo' });
   }
 });

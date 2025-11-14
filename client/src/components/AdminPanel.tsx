@@ -58,7 +58,7 @@ const DesktopDashboardCard: React.FC<{ title: string; value: string | number; de
       <div>
         <h3 className="font-semibold text-gray-600 text-sm mb-1">{title}</h3>
         <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500 mt-1">{description}</p>
+        <div className="text-xs text-gray-500 mt-1">{description}</div>
       </div>
     </div>
   </div>
@@ -858,7 +858,7 @@ const AdminPanel: React.FC = () => {
         onOk={handleImageSave}
         okText="Save"
         okButtonProps={{ disabled: !srcImage || !completedCrop }}
-        destroyOnClose
+        destroyOnHidden
       >
         <div className="space-y-3">
           <input type="file" accept="image/*" onChange={handleImageUpload} />
