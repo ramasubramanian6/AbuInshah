@@ -20,7 +20,7 @@ const { getMembersByDesignation } = require('./utils/excel');
 const { processCircularImage, generateFooterSVG, createFinalPoster } = require('./utils/image');
 const { sendEmail, testEmailConfiguration } = require('./utils/emailSender');
 const db = require('./db');
-const { uploadLocalImage, cloudinary } = require('./utils/cloudinary');
+const { uploadToGCS, downloadFromGCS } = require('./utils/gcs');
 const axios = require('axios');
 
 const app = express();
@@ -35,7 +35,15 @@ const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 
 const upload = multer({
   dest: UPLOADS_DIR,
-  limits: { fileSize: 5 * 1024 * 1024 }
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}. Only image files are allowed.`), false);
+    }
+  }
 });
 
 // Move CORS configuration before routes
@@ -147,8 +155,12 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
   let photoUrl;
   try {
     photoUrl = await uploadToGCS(finalPhotoPath, gcsFileName);
+    // Clean up local temp file after successful upload
+    try { await fs.promises.unlink(finalPhotoPath); } catch (e) { console.warn('Temp file cleanup failed (ignored):', e.message || e); }
   } catch (err) {
     console.error('GCS upload failed:', err);
+    // Clean up temp file on failure
+    try { await fs.promises.unlink(finalPhotoPath); } catch (e) { /* ignore */ }
     return res.status(500).json({ error: 'Failed to upload photo to cloud storage' });
   }
 
@@ -159,8 +171,6 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
       const actualDesignation = designation && designation.toLowerCase() === 'both' ? 'Health insurance advisor,Wealth Manager' : designation;
       const userData = { id, name, phone, email, designation: actualDesignation, photoUrl };
       if (teamName) userData.teamName = teamName;
-
-      // Remove Cloudinary logic; photoUrl is now always the GCS public URL
 
       await db.createUser(userData);
       res.json({ success: true, message: '✅ Member registered successfully', user: userData });
@@ -217,25 +227,54 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
     let successfulRecipients = 0;
     for (const person of recipients) {
       const finalImagePath = path.join(OUTPUT_DIR, `final_${Date.now()}_${person.name.replace(/\s+/g, '_')}.jpeg`);
-      
+      let isTempFile = false;
+      let photoPath = '';
+
       try {
-        let photoPath = '';
-        // If the stored person.photo is a URL (Cloudinary), download it to a temp file
-        if (person.photo && String(person.photo).startsWith('http')) {
+        const photoSource = person.photoUrl || person.photo || '';
+
+        if (photoSource.startsWith('https://storage.googleapis.com')) {
+          // GCS URL, download to temp file
+          const bucketName = process.env.GCS_BUCKET || 'abuinshah-photos';
+          const urlParts = photoSource.split(`https://storage.googleapis.com/${bucketName}/`);
+          if (urlParts.length === 2) {
+            const gcsFileName = urlParts[1];
+            const tmpFile = path.join(UPLOADS_DIR, `${person.id || person._id}_gcs_${Date.now()}.jpeg`);
+            try {
+              await downloadFromGCS(gcsFileName, tmpFile);
+              photoPath = tmpFile;
+              isTempFile = true;
+            } catch (e) {
+              console.warn(`Failed to download GCS photo for ${person.name}:`, e.message || e);
+              continue;
+            }
+          } else {
+            console.warn(`Invalid GCS URL for ${person.name}: ${photoSource}`);
+            continue;
+          }
+        } else if (photoSource.startsWith('http')) {
+          // Other remote URL, download to temp file
           const tmpFile = path.join(UPLOADS_DIR, `${person.id || person._id}_remote_${Date.now()}.jpg`);
           try {
-            const response = await axios.get(person.photo, { responseType: 'arraybuffer' });
+            const response = await axios.get(photoSource, { responseType: 'arraybuffer' });
             await fs.promises.writeFile(tmpFile, response.data);
             photoPath = tmpFile;
+            isTempFile = true;
           } catch (e) {
             console.warn(`Failed to download remote photo for ${person.name}:`, e.message || e);
             continue;
           }
+        } else if (photoSource.startsWith('/')) {
+          // Local path
+          photoPath = path.join(__dirname, photoSource);
         } else {
-          photoPath = path.join(__dirname, person.photoUrl || person.photo || '');
+          // Invalid
+          console.warn(`Skipping poster for ${person.name}: Invalid photo source: ${photoSource}`);
+          continue;
         }
+
         if (!photoPath || !fs.existsSync(photoPath)) {
-          console.warn(`Skipping poster for ${person.name}: Invalid or missing photo.`);
+          console.warn(`Skipping poster for ${person.name}: Photo file not found.`);
           continue;
         }
 
@@ -289,12 +328,16 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
         console.error(`Failed to generate/send poster for ${person.name}:`, err.message);
         // Clean up any partially created files for this recipient
         try { await fs.promises.unlink(finalImagePath); } catch (e) { /* ignore */ }
+        // Clean up temp photo file if created
+        if (isTempFile) {
+          try { await fs.promises.unlink(photoPath); } catch (e) { /* ignore */ }
+        }
       } finally {
         // Ensure the final image is cleaned up after each attempt
         try { await fs.promises.unlink(finalImagePath); } catch (e) { /* ignore */ }
-        // Remove downloaded remote photo if we created one
-        if (person.photo && String(person.photo).startsWith('http')) {
-          try { if (photoPath && photoPath.includes('_remote_')) await fs.promises.unlink(photoPath); } catch (e) { /* ignore */ }
+        // Clean up temp photo file if created
+        if (isTempFile) {
+          try { await fs.promises.unlink(photoPath); } catch (e) { /* ignore */ }
         }
       }
     }
@@ -440,29 +483,26 @@ app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res
       try { await fs.promises.rename(req.file.path, finalPhotoPath); } catch (e) { console.warn('Fallback save failed:', e.message || e); }
     }
 
-    const oldPhoto = user.photoUrl || user.photo || '';
-    if (oldPhoto) {
-      const oldPath = path.join(__dirname, oldPhoto.startsWith('/') ? oldPhoto.slice(1) : oldPhoto);
-      try { await fs.promises.unlink(oldPath); } catch (e) { console.warn('Old photo unlink failed (ignored):', e.message || e); }
-    }
-
-    const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
-    // Try to upload the processed image to Cloudinary (optional)
-    let remotePhoto = '';
+    // Upload processed image to GCS
+    const { uploadToGCS } = require('./utils/gcs');
+    const gcsFileName = `photos/${Date.now()}_${filenameSafe}.jpeg`;
+    let photoUrl;
     try {
-      if (cloudinary && cloudinary.config && cloudinary.config().api_key) {
-        const uploadRes = await uploadLocalImage(finalPhotoPath, { folder: 'wealthplus' });
-        if (uploadRes && uploadRes.secure_url) remotePhoto = uploadRes.secure_url;
-      }
-    } catch (e) {
-      console.warn('Cloudinary upload failed (ignored):', e.message || e);
+      photoUrl = await uploadToGCS(finalPhotoPath, gcsFileName);
+    } catch (err) {
+      console.error('GCS upload failed:', err);
+      // Clean up temp file on failure
+      try { await fs.promises.unlink(finalPhotoPath); } catch (e) { /* ignore */ }
+      return res.status(500).json({ error: 'Failed to upload photo to cloud storage' });
     }
 
-    // Update DB: keep local photoUrl for legacy flows, set remote `photo` when available
-    const updatePayload = { photoUrl, photo: remotePhoto || photoUrl };
-    await db.updateUser(id, updatePayload);
+    // Update DB: set photoUrl to GCS URL, clear photo field
+    await db.updateUser(id, { photoUrl, photo: '' });
 
-    res.json({ success: true, photoUrl, photo: updatePayload.photo });
+    // Clean up local temp file
+    try { await fs.promises.unlink(finalPhotoPath); } catch (e) { console.warn('Local file cleanup failed (ignored):', e.message || e); }
+
+    res.json({ success: true, photoUrl });
   } catch (err) {
     console.error('Admin photo update error:', err);
     res.status(500).json({ error: 'Failed to update photo' });
