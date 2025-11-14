@@ -141,7 +141,16 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
       }
     }
 
-  const photoUrl = `/uploads/${path.basename(finalPhotoPath)}`;
+  // Upload processed image to GCS and get public URL
+  const { uploadToGCS } = require('./utils/gcs');
+  const gcsFileName = `photos/${Date.now()}_${filenameSafe}.jpeg`;
+  let photoUrl;
+  try {
+    photoUrl = await uploadToGCS(finalPhotoPath, gcsFileName);
+  } catch (err) {
+    console.error('GCS upload failed:', err);
+    return res.status(500).json({ error: 'Failed to upload photo to cloud storage' });
+  }
 
     try {
       // To avoid duplicate emails, if user selected 'both' we store both designations
@@ -151,17 +160,7 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
       const userData = { id, name, phone, email, designation: actualDesignation, photoUrl };
       if (teamName) userData.teamName = teamName;
 
-      // If Cloudinary is configured, upload the processed image and store the remote URL
-      try {
-        if (cloudinary.config().api_key) {
-          const uploadRes = await uploadLocalImage(finalPhotoPath, { folder: 'wealthplus' });
-          if (uploadRes && uploadRes.secure_url) {
-            userData.photo = uploadRes.secure_url;
-          }
-        }
-      } catch (e) {
-        console.warn('Cloudinary upload failed (ignored):', e.message || e);
-      }
+      // Remove Cloudinary logic; photoUrl is now always the GCS public URL
 
       await db.createUser(userData);
       res.json({ success: true, message: '✅ Member registered successfully', user: userData });
