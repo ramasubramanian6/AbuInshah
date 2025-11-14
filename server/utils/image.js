@@ -71,21 +71,38 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
 
   let svgLines = [];
   let y = startY;
-  for (const l of lines) {
-    svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${l}</text>`);
+  for (let i = 0; i < lines.length; i++) {
+    // Italic for the second line (designation)
+    if (i === 1) {
+      svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext italic">${lines[i]}</text>`);
+    } else {
+      svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${lines[i]}</text>`);
+    }
     y += lineHeight;
   }
+
+  // Use relative path for font file (should be accessible to sharp)
+  const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf').replace(/\\/g, '/');
 
   const svg = `
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
       <style>
+        @font-face {
+          font-family: 'Noto Sans';
+          src: url('file://${fontPath}') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+        }
         .footertext {
-          font-family: 'Arial, Helvetica, sans-serif';
+          font-family: 'Noto Sans', Arial, Helvetica, sans-serif;
           fill: #292d6c;
           font-weight: bold;
           font-size: ${allFontSize}px;
           text-anchor: start;
           dominant-baseline: middle;
+        }
+        .footertext.italic {
+          font-style: italic;
         }
       </style>
       ${svgLines.join('\n')}
