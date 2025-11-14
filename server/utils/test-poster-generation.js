@@ -17,7 +17,7 @@ async function testPosterGeneration() {
   console.log('Files in output before test:', fs.readdirSync(path.join(__dirname, '../output')).length);
 
   const form = new FormData();
-  form.append('designation', 'Partner'); // Test with Partner designation
+  form.append('designation', 'wealth'); // Test with wealth designation
   form.append('template', fs.createReadStream(templatePath));
 
   try {

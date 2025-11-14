@@ -10,17 +10,18 @@ const fs = require('fs');
  * - Adjusted vertical spacing for the text block to have equal space above and below.
  */
 function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fontSize, isTeamName = false) {
-  // Add more vertical space between lines for clarity
-  const totalLines = 4;
-  const lineHeight = Math.round(fontSize * 1.5); // Increased line height for more space
-  const totalHeight = lineHeight * totalLines;
-  const verticalPadding = (footerHeight - totalHeight) / 2;
-  const startY = verticalPadding + lineHeight * 0.6; // First baseline
-  const textPadding = 2; // Consistent left padding
-  // Minimum font size allowed; lower value to avoid forced overflow
-  const MIN_FONT_SIZE = 12;
-  const allFontSizeInitial = Math.max(fontSize, 18);
-  let allFontSize = allFontSizeInitial;
+   console.log('DEBUG generateFooterSVG called with:', { name, designation, phone, textWidth, footerHeight, fontSize, isTeamName });
+   // Add more vertical space between lines for clarity
+   const totalLines = 4;
+   const lineHeight = Math.round(fontSize * 1.5); // Increased line height for more space
+   const totalHeight = lineHeight * totalLines;
+   const verticalPadding = (footerHeight - totalHeight) / 2;
+   const startY = verticalPadding + lineHeight * 0.6; // First baseline
+   const textPadding = 2; // Consistent left padding
+   // Minimum font size allowed; lower value to avoid forced overflow
+   const MIN_FONT_SIZE = 12;
+   const allFontSizeInitial = Math.max(fontSize, 18);
+   let allFontSize = allFontSizeInitial;
 
   // Helper: normalize casing and format designation
   const normalizeDesignation = (d) => {
@@ -75,11 +76,11 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
     y += lineHeight;
   }
 
-  return `
+  const svg = `
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
       <style>
         .footertext {
-          font-family: 'DejaVu Sans', 'FreeSans', sans-serif;
+          font-family: 'Arial, Helvetica, sans-serif';
           fill: #292d6c;
           font-weight: bold;
           font-size: ${allFontSize}px;
@@ -90,6 +91,8 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
       ${svgLines.join('\n')}
     </svg>
   `;
+  console.log('DEBUG generateFooterSVG generated SVG:', svg);
+  return svg;
 }
 
 /**
@@ -187,6 +190,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
   // Always use the exact designation from person.designation (as filtered by send-posters)
   // If person has a teamName, treat the designation as a team name and display only that
   const isTeamName = Boolean(person.teamName && String(person.teamName).trim());
+  console.log('DEBUG createFinalPoster: isTeamName:', isTeamName, 'person.teamName:', person.teamName);
   const footerSVG = generateFooterSVG(
     person.name,
     isTeamName ? person.teamName : person.designation,
@@ -196,9 +200,12 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     fontSize,
     isTeamName
   );
+  console.log('DEBUG createFinalPoster: footerSVG generated, length:', footerSVG.length);
 
   const textBuffer = await sharp(Buffer.from(footerSVG)).png().toBuffer();
+  console.log('DEBUG createFinalPoster: textBuffer created, size:', textBuffer.length);
   const textMetadata = await sharp(textBuffer).metadata();
+  console.log('DEBUG createFinalPoster: textMetadata:', textMetadata);
 
   const circularPhoto = await sharp(person.photo)
     .resize(photoSize, photoSize)
@@ -238,6 +245,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
   const lineSVG = `<svg width="${lineWidth}" height="${lineHeightSVG}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${lineWidth}" height="${lineHeightSVG}" fill="#1B75BB"/></svg>`;
   const lineBuffer = await sharp(Buffer.from(lineSVG)).png().toBuffer();
 
+  console.log('DEBUG createFinalPoster: compositing footer with positions - photo:', { top: Math.floor((footerHeight - photoSize) / 2), left: photoLeft }, 'text:', { top: Math.floor((footerHeight - textMetadata.height) / 2), left: textLeft }, 'line:', { top: lineY, left: lineX }, 'logo:', { top: Math.floor((footerHeight - logoSize) / 2), left: logoXCentered });
   const gradientFooterBuffer = await sharp({
     create: {
       width,
@@ -254,6 +262,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     ])
     .jpeg()
     .toBuffer();
+  console.log('DEBUG createFinalPoster: footerBuffer created, size:', gradientFooterBuffer.length);
 
   const finalImageBuffer = await sharp({
     create: {
