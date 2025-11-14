@@ -82,21 +82,11 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
     y += lineHeight;
   }
 
-  // Use relative path for font file (should be accessible to sharp)
-  const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf').replace(/\\/g, '/');
-  console.log('DEBUG generateFooterSVG fontPath:', fontPath);
-
   const svg = `
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
       <style>
-        @font-face {
-          font-family: 'Noto Sans';
-          src: url('file://${fontPath}') format('truetype');
-          font-weight: normal;
-          font-style: normal;
-        }
         .footertext {
-          font-family: 'Noto Sans', Arial, Helvetica, sans-serif;
+          font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
           fill: #292d6c;
           font-weight: bold;
           font-size: ${allFontSize}px;
