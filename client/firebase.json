@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "wealthplusmanagement-ca4fe",
     "public": "dist",
     "ignore": [
       "firebase.json",
