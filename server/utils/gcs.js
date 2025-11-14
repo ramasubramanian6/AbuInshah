@@ -16,4 +16,11 @@ async function uploadToGCS(localFilePath, destFileName) {
   return `https://storage.googleapis.com/${BUCKET_NAME}/${destFileName}`;
 }
 
-module.exports = { uploadToGCS };
+// Download image from GCS to local temp file
+async function downloadFromGCS(gcsFileName, localDestPath) {
+  const file = bucket.file(gcsFileName);
+  await file.download({ destination: localDestPath });
+  return localDestPath;
+}
+
+module.exports = { uploadToGCS, downloadFromGCS };
