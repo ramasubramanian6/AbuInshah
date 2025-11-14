@@ -79,7 +79,7 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
       <style>
         .footertext {
-          font-family: Arial, sans-serif;
+          font-family: 'DejaVu Sans', 'FreeSans', sans-serif;
           fill: #292d6c;
           font-weight: bold;
           font-size: ${allFontSize}px;
