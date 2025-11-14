@@ -29,11 +29,7 @@ async function uploadToGCS(localFilePath, destFileName) {
   console.log(`Uploading ${localFilePath} to GCS as ${destFileName}`);
   await retryOperation(async () => {
     await bucket.upload(localFilePath, {
-      destination: destFileName,
-      public: true,
-      metadata: {
-        cacheControl: 'public, max-age=31536000',
-      },
+      destination: destFileName
     });
   });
   const url = `https://storage.googleapis.com/${BUCKET_NAME}/${destFileName}`;
