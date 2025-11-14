@@ -84,6 +84,7 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
 
   // Use relative path for font file (should be accessible to sharp)
   const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf').replace(/\\/g, '/');
+  console.log('DEBUG generateFooterSVG fontPath:', fontPath);
 
   const svg = `
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
