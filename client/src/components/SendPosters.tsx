@@ -38,7 +38,7 @@ const SendPosters: React.FC = () => {
 
     try {
       const API_URL = import.meta.env.VITE_API_URL;
-      const res = await fetch(`${API_URL}api/send-posters`, {
+      const res = await fetch(`${API_URL.replace(/\/$/, '')}/api/send-posters`, {
         method: "POST",
         body: formData,
       });
