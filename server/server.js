@@ -42,7 +42,6 @@ const upload = multer({
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin) return callback(null, true);
-
     if (allowedOrigins.indexOf(origin) === -1) {
       return callback(new Error('CORS policy violation'), false);
     }
@@ -50,9 +49,13 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
+// Explicitly handle OPTIONS requests for all routes (CORS preflight)
+app.options('*', cors());
 app.use(express.json());
 app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
 
