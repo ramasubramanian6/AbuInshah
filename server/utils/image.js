@@ -8,6 +8,7 @@ const path = require('path');
   -------------------------------- */
 const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf');
 const italicFontPath = path.join(__dirname, '../Noto_Sans/static/NotoSans-Italic.ttf');
+const emojiFontPath = path.join(__dirname, '../Noto_Sans/NotoColorEmoji.ttf');
 
 // Warn clearly if fonts are missing (production issue)
 if (!fs.existsSync(fontPath)) {
@@ -18,9 +19,14 @@ if (!fs.existsSync(italicFontPath)) {
    console.error('❌ ITALIC FONT FILE NOT FOUND:', italicFontPath);
    console.error('➡️ Make sure Noto_Sans/static/NotoSans-Italic.ttf exists in backend.');
  }
+if (!fs.existsSync(emojiFontPath)) {
+   console.error('❌ EMOJI FONT FILE NOT FOUND:', emojiFontPath);
+   console.error('➡️ Make sure Noto_Sans/NotoColorEmoji.ttf exists in backend.');
+ }
 
 let fontBase64 = '';
 let italicFontBase64 = '';
+let emojiFontBase64 = '';
 try {
    fontBase64 = fs.readFileSync(fontPath).toString('base64');
    console.log('✅ Regular font loaded successfully.');
@@ -32,6 +38,12 @@ try {
    console.log('✅ Italic font loaded successfully.');
 } catch (e) {
    console.error('❌ ERROR reading italic font file:', e.message);
+}
+try {
+   emojiFontBase64 = fs.readFileSync(emojiFontPath).toString('base64');
+   console.log('✅ Emoji font loaded successfully.');
+} catch (e) {
+   console.error('❌ ERROR reading emoji font file:', e.message);
 }
 
 try {
@@ -45,6 +57,12 @@ try {
    console.log('✅ Italic font registered.');
 } catch (e) {
    console.error('❌ ERROR registering italic font:', e.message);
+}
+try {
+   registerFont(emojiFontPath, { family: 'Noto Color Emoji' });
+   console.log('✅ Emoji font registered.');
+} catch (e) {
+   console.error('❌ ERROR registering emoji font:', e.message);
 }
 
 
@@ -118,7 +136,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
 
     const lineHeight = Math.round(fontSize * 1.18);
     const requiredTextHeight = lineHeight * 4;
-    const footerHeight = Math.max(photoSize, requiredTextHeight, logoSize) + 18;
+    const footerHeight = Math.max(photoSize, requiredTextHeight, logoSize) + 24;
 
     const isTeamName = Boolean(person.teamName && String(person.teamName).trim());
     const normalizeDesignation = (d) => {
@@ -148,7 +166,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
       return lines.every(line => (line.length * charWidth) <= maxTextWidth);
     };
 
-    let allFontSize = Math.max(fontSize, 18);
+    let allFontSize = Math.max(fontSize, 24);
     const MIN_FONT_SIZE = 12;
     while (allFontSize > MIN_FONT_SIZE && !fitsAtSize(allFontSize)) {
       allFontSize = Math.max(MIN_FONT_SIZE, Math.floor(allFontSize * 0.92));
@@ -169,9 +187,9 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     let y = startY;
     for (let i = 0; i < lines.length; i++) {
       if (i === 1) {
-        ctx.font = `bold italic ${allFontSize}px "Noto Sans"`;
+        ctx.font = `bold italic ${allFontSize}px "Noto Sans", "Noto Color Emoji"`;
       } else {
-        ctx.font = `bold ${allFontSize}px "Noto Sans"`;
+        ctx.font = `bold ${allFontSize}px "Noto Sans", "Noto Color Emoji"`;
       }
       ctx.fillText(lines[i], textPadding, y);
       y += textLineHeight;
