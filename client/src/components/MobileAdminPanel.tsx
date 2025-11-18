@@ -63,7 +63,6 @@ const AdminPanel = () => {
     wealthManagers: 0,
     designatedUsers: 0,
   });
-  const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'pinging'>('pinging');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
   const [confirmMessage, setConfirmMessage] = useState('');
@@ -120,21 +119,6 @@ const AdminPanel = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // Backend status pinging
-  useEffect(() => {
-    const pingBackend = async () => {
-      try {
-        setBackendStatus('pinging');
-        const response = await fetch(`${API_BASE_URL}api/ping`);
-        setBackendStatus(response.ok ? 'online' : 'offline');
-      } catch {
-        setBackendStatus('offline');
-      }
-    };
-    pingBackend();
-    const interval = setInterval(pingBackend, 10000);
-    return () => clearInterval(interval);
-  }, [API_BASE_URL]);
 
   // Effect to calculate max-height for user list dynamic scrolling
   useEffect(() => {
@@ -454,13 +438,6 @@ const AdminPanel = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Marketing Poster</h1>
-            {backendStatus !== 'offline' && (
-              <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full font-medium
-                ${backendStatus === 'online' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${backendStatus === 'online' ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
-                {backendStatus === 'online' ? 'Connected' : 'Connecting...'}
-              </span>
-            )}
           </div>
           {/* Desktop Navigation (hidden on mobile) */}
           <nav className="hidden sm:flex items-center gap-4">

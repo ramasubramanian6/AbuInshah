@@ -85,8 +85,6 @@ const AdminPanel: React.FC = () => {
   // Active filter for the list (all | partner | team | admin | founder)
   const [activeFilter, setActiveFilter] = useState<'all' | 'partner' | 'team' | 'admin' | 'founder'>('all');
 
-  // Backend status
-  const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'pinging'>('pinging');
   
   // Excel export removed
 
@@ -175,21 +173,6 @@ const AdminPanel: React.FC = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // ------------------ Ping Backend ------------------
-  useEffect(() => {
-    const pingBackend = async () => {
-      try {
-        setBackendStatus('pinging');
-        const res = await fetch(`${API_BASE_URL}api/ping`);
-        setBackendStatus(res.ok ? 'online' : 'offline');
-      } catch {
-        setBackendStatus('offline');
-      }
-    };
-    pingBackend();
-    const interval = setInterval(pingBackend, 10000);
-    return () => clearInterval(interval);
-  }, [API_BASE_URL]);
 
   // ------------------ Dynamic list height ------------------
   useEffect(() => {
@@ -714,16 +697,6 @@ const AdminPanel: React.FC = () => {
           <div className="flex items-center gap-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Marketing Poster</h1>
             {/* Export users removed */}
-            {backendStatus !== 'offline' && (
-              <span
-                className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full font-medium ${
-                  backendStatus === 'online' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${backendStatus === 'online' ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
-                {backendStatus === 'online' ? 'Connected' : 'Connecting...'}
-              </span>
-            )}
           </div>
           {/* Desktop nav */}
           <nav className="hidden sm:flex items-center gap-4">
