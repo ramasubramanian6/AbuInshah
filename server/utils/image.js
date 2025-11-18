@@ -7,8 +7,8 @@ const path = require('path');
     ✅ FIXED: SAFE FONT LOADING
   -------------------------------- */
 const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf');
-const italicFontPath = path.join(__dirname, '../Noto_Sans/static/NotoSans-Italic.ttf');
-const emojiFontPath = path.join(__dirname, '../Noto_Sans/NotoColorEmoji.ttf');
+const italicFontPath = path.join(__dirname, '../assets/Noto_Sans/static/NotoSans-Italic.ttf');
+const emojiFontPath = path.join(__dirname, '../assets/Noto_Sans/NotoEmoji-Regular.ttf');
 
 // Warn clearly if fonts are missing (production issue)
 if (!fs.existsSync(fontPath)) {
@@ -20,9 +20,9 @@ if (!fs.existsSync(italicFontPath)) {
    console.error('➡️ Make sure Noto_Sans/static/NotoSans-Italic.ttf exists in backend.');
  }
 if (!fs.existsSync(emojiFontPath)) {
-   console.error('❌ EMOJI FONT FILE NOT FOUND:', emojiFontPath);
-   console.error('➡️ Make sure Noto_Sans/NotoColorEmoji.ttf exists in backend.');
- }
+    console.error('❌ EMOJI FONT FILE NOT FOUND:', emojiFontPath);
+    console.error('➡️ Make sure Noto_Sans/NotoEmoji-Regular.ttf exists in backend.');
+  }
 
 let fontBase64 = '';
 let italicFontBase64 = '';
@@ -59,7 +59,7 @@ try {
    console.error('❌ ERROR registering italic font:', e.message);
 }
 try {
-   registerFont(emojiFontPath, { family: 'Noto Color Emoji' });
+   registerFont(emojiFontPath, { family: 'Noto Emoji' });
    console.log('✅ Emoji font registered.');
 } catch (e) {
    console.error('❌ ERROR registering emoji font:', e.message);
@@ -187,9 +187,9 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     let y = startY;
     for (let i = 0; i < lines.length; i++) {
       if (i === 1) {
-        ctx.font = `bold italic ${allFontSize}px "Noto Sans", "Noto Color Emoji"`;
+        ctx.font = `bold italic ${allFontSize}px "Noto Sans", "Noto Emoji"`;
       } else {
-        ctx.font = `bold ${allFontSize}px "Noto Sans", "Noto Color Emoji"`;
+        ctx.font = `bold ${allFontSize}px "Noto Sans", "Noto Emoji"`;
       }
       ctx.fillText(lines[i], textPadding, y);
       y += textLineHeight;
