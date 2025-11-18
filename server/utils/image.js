@@ -1,10 +1,11 @@
 const sharp = require('sharp');
+const { createCanvas, registerFont } = require('canvas');
 const fs = require('fs');
 const path = require('path');
 
 /* -------------------------------
     ✅ FIXED: SAFE FONT LOADING
- -------------------------------- */
+  -------------------------------- */
 const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf');
 const italicFontPath = path.join(__dirname, '../Noto_Sans/static/NotoSans-Italic.ttf');
 
@@ -33,108 +34,19 @@ try {
    console.error('❌ ERROR reading italic font file:', e.message);
 }
 
-
-/**
- * Generates an SVG containing text information.
- */
-function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fontSize, isTeamName = false) {
-  console.log('DEBUG generateFooterSVG called with:', { name, designation, phone, textWidth, footerHeight, fontSize, isTeamName });
-
-  const totalLines = 4;
-  const lineHeight = Math.round(fontSize * 1.5);
-  const totalHeight = lineHeight * totalLines;
-  const verticalPadding = (footerHeight - totalHeight) / 2;
-  const startY = verticalPadding + lineHeight * 0.6;
-  const textPadding = 2;
-  const MIN_FONT_SIZE = 12;
-  const allFontSizeInitial = Math.max(fontSize, 18);
-  let allFontSize = allFontSizeInitial;
-
-  const normalizeDesignation = (d) => {
-    if (!d) return 'N/A | WealthPlus';
-    const dl = d.toLowerCase();
-    if (dl.includes('wealth')) return 'Wealth Manager | WealthPlus';
-    if (dl.includes('health')) return 'Health Insurance Advisor | WealthPlus';
-    return `${d.replace(/\s+/g, ' ').trim()} | WealthPlus`;
-  };
-
-  const formattedDesignation = isTeamName
-    ? (String(designation || '').trim())
-    : normalizeDesignation(designation || '');
-
-  const escapeXml = (unsafe) => String(unsafe)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
-  const lines = [
-    String(name || ''),
-    formattedDesignation,
-    `✔️ Investments ✔️ Insurance ✔️ Properties`,
-    `Phone: ${String(phone || '')}`,
-  ].map(l => escapeXml(l));
-
-  const maxTextWidth = Math.max(10, textWidth - textPadding * 2);
-  const approxCharWidth = 0.55;
-
-  const fitsAtSize = (size) => {
-    const charWidth = size * approxCharWidth;
-    return lines.every(line => (line.length * charWidth) <= maxTextWidth);
-  };
-
-  while (allFontSize > MIN_FONT_SIZE && !fitsAtSize(allFontSize)) {
-    allFontSize = Math.max(MIN_FONT_SIZE, Math.floor(allFontSize * 0.92));
-    if (allFontSize <= MIN_FONT_SIZE) break;
-  }
-
-  let svgLines = [];
-  let y = startY;
-  for (let i = 0; i < lines.length; i++) {
-    if (i === 1) {
-      svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext italic">${lines[i]}</text>`);
-    } else {
-      svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${lines[i]}</text>`);
-    }
-    y += lineHeight;
-  }
-
-  const svg = `
-    <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <style type="text/css">
-          @font-face {
-            font-family: 'Noto Sans';
-            src: url('data:font/ttf;base64,${fontBase64}') format('truetype');
-            font-weight: normal;
-            font-style: normal;
-          }
-          @font-face {
-            font-family: 'Noto Sans';
-            src: url('data:font/ttf;base64,${italicFontBase64}') format('truetype');
-            font-weight: normal;
-            font-style: italic;
-          }
-          .footertext {
-            font-family: 'Noto Sans', sans-serif;
-            fill: #292d6c;
-            font-weight: bold;
-            font-size: ${allFontSize}px;
-            text-anchor: start;
-            dominant-baseline: middle;
-          }
-          .footertext.italic {
-            font-style: italic;
-          }
-        </style>
-      </defs>
-      ${svgLines.join('\n')}
-    </svg>
-  `;
-
-  return svg;
+try {
+   registerFont(fontPath, { family: 'Noto Sans', weight: 'normal', style: 'normal' });
+   console.log('✅ Regular font registered.');
+} catch (e) {
+   console.error('❌ ERROR registering regular font:', e.message);
 }
+try {
+   registerFont(italicFontPath, { family: 'Noto Sans', weight: 'normal', style: 'italic' });
+   console.log('✅ Italic font registered.');
+} catch (e) {
+   console.error('❌ ERROR registering italic font:', e.message);
+}
+
 
 
 /**
@@ -155,6 +67,7 @@ async function processCircularImage(inputPath, outputPath, size) {
 
   fs.writeFileSync(outputPath, buffer);
 }
+
 
 
 /**
@@ -208,17 +121,63 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     const footerHeight = Math.max(photoSize, requiredTextHeight, logoSize) + 18;
 
     const isTeamName = Boolean(person.teamName && String(person.teamName).trim());
-    const footerSVG = generateFooterSVG(
-      person.name,
-      isTeamName ? person.teamName : person.designation,
-      person.phone,
-      textWidth,
-      footerHeight,
-      fontSize,
-      isTeamName
-    );
+    const normalizeDesignation = (d) => {
+      if (!d) return 'N/A | WealthPlus';
+      const dl = d.toLowerCase();
+      if (dl.includes('wealth')) return 'Wealth Manager | WealthPlus';
+      if (dl.includes('health')) return 'Health Insurance Advisor | WealthPlus';
+      return `${d.replace(/\s+/g, ' ').trim()} | WealthPlus`;
+    };
 
-    const textBuffer = await sharp(Buffer.from(footerSVG)).png().toBuffer();
+    const formattedDesignation = isTeamName
+      ? (String(person.teamName || '').trim())
+      : normalizeDesignation(person.designation || '');
+
+    const lines = [
+      String(person.name || ''),
+      formattedDesignation,
+      `✔️ Investments ✔️ Insurance ✔️ Properties`,
+      `Phone: ${String(person.phone || '')}`,
+    ];
+
+    const maxTextWidth = Math.max(10, textWidth - 2 * 2);
+    const approxCharWidth = 0.55;
+
+    const fitsAtSize = (size) => {
+      const charWidth = size * approxCharWidth;
+      return lines.every(line => (line.length * charWidth) <= maxTextWidth);
+    };
+
+    let allFontSize = Math.max(fontSize, 18);
+    const MIN_FONT_SIZE = 12;
+    while (allFontSize > MIN_FONT_SIZE && !fitsAtSize(allFontSize)) {
+      allFontSize = Math.max(MIN_FONT_SIZE, Math.floor(allFontSize * 0.92));
+      if (allFontSize <= MIN_FONT_SIZE) break;
+    }
+
+    const totalLines = 4;
+    const textLineHeight = Math.round(allFontSize * 1.5);
+    const totalHeight = textLineHeight * totalLines;
+    const verticalPadding = (footerHeight - totalHeight) / 2;
+    const startY = verticalPadding + textLineHeight * 0.6;
+    const textPadding = 2;
+
+    const canvas = createCanvas(textWidth, footerHeight);
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#292d6c';
+    let y = startY;
+    for (let i = 0; i < lines.length; i++) {
+      if (i === 1) {
+        ctx.font = `bold italic ${allFontSize}px "Noto Sans"`;
+      } else {
+        ctx.font = `bold ${allFontSize}px "Noto Sans"`;
+      }
+      ctx.fillText(lines[i], textPadding, y);
+      y += textLineHeight;
+    }
+
+    const textBuffer = canvas.toBuffer('image/png');
     const textMetadata = await sharp(textBuffer).metadata();
 
     const circularPhoto = await sharp(person.photo)
@@ -297,7 +256,6 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
 }
 
 module.exports = {
-  generateFooterSVG,
   processCircularImage,
   createFinalPoster,
 };
