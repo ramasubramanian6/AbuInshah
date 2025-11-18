@@ -3,22 +3,34 @@ const fs = require('fs');
 const path = require('path');
 
 /* -------------------------------
-   ✅ FIXED: SAFE FONT LOADING
--------------------------------- */
-const fontPath = path.join(__dirname, '../fonts/NotoSans-Regular.ttf');
+    ✅ FIXED: SAFE FONT LOADING
+ -------------------------------- */
+const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf');
+const italicFontPath = path.join(__dirname, '../Noto_Sans/static/NotoSans-Italic.ttf');
 
-// Warn clearly if font is missing (production issue)
+// Warn clearly if fonts are missing (production issue)
 if (!fs.existsSync(fontPath)) {
-  console.error('❌ FONT FILE NOT FOUND:', fontPath);
-  console.error('➡️ Make sure fonts/NotoSans-Regular.ttf exists in backend.');
-}
+   console.error('❌ FONT FILE NOT FOUND:', fontPath);
+   console.error('➡️ Make sure assets/fonts/NotoSans-Regular.ttf exists in backend.');
+ }
+if (!fs.existsSync(italicFontPath)) {
+   console.error('❌ ITALIC FONT FILE NOT FOUND:', italicFontPath);
+   console.error('➡️ Make sure Noto_Sans/static/NotoSans-Italic.ttf exists in backend.');
+ }
 
 let fontBase64 = '';
+let italicFontBase64 = '';
 try {
-  fontBase64 = fs.readFileSync(fontPath).toString('base64');
-  console.log('✅ Font loaded successfully.');
+   fontBase64 = fs.readFileSync(fontPath).toString('base64');
+   console.log('✅ Regular font loaded successfully.');
 } catch (e) {
-  console.error('❌ ERROR reading font file:', e.message);
+   console.error('❌ ERROR reading regular font file:', e.message);
+}
+try {
+   italicFontBase64 = fs.readFileSync(italicFontPath).toString('base64');
+   console.log('✅ Italic font loaded successfully.');
+} catch (e) {
+   console.error('❌ ERROR reading italic font file:', e.message);
 }
 
 
@@ -97,6 +109,12 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
             src: url('data:font/ttf;base64,${fontBase64}') format('truetype');
             font-weight: normal;
             font-style: normal;
+          }
+          @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,${italicFontBase64}') format('truetype');
+            font-weight: normal;
+            font-style: italic;
           }
           .footertext {
             font-family: 'Noto Sans', sans-serif;
