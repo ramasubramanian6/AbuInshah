@@ -71,6 +71,16 @@ app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
 app.use(express.static(path.join(__dirname, '../client/dist')));
 app.use(express.static(path.join(__dirname, 'uploads')));
 
+// Serve font files with proper MIME types and caching
+app.use('/assets/fonts', express.static(path.join(__dirname, '../client/assets/fonts'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.ttf')) {
+      res.setHeader('Content-Type', 'font/ttf');
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+    }
+  }
+}));
+
 app.use((err, req, res, next) => {
   console.error('Server Error:', err);
   res.status(500).json({ error: 'Internal server error' });
