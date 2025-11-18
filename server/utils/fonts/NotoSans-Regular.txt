@@ -1,0 +1,1 @@
+This is a placeholder. Please download the official NotoSans-Regular.ttf font from Google Fonts (https://fonts.google.com/noto/specimen/Noto+Sans) and place it in this directory for production use.

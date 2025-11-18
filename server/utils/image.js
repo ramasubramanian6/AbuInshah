@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 // Load font as base64 for embedding in SVG
-const fontPath = path.join(__dirname, '../Noto_Sans/static/NotoSans-Regular.ttf');
+const fontPath = path.join(__dirname, 'fonts/NotoSans-Regular.ttf');
+
 const fontBase64 = fs.readFileSync(fontPath).toString('base64');
 
 
