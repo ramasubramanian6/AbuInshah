@@ -546,19 +546,20 @@ app.get('/api/ping', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is live!' });
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080;  // Cloud Run sets PORT to 8080
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 
 const startServer = async () => {
   try {
     await db.connect();
+    console.log('✅ Connected to MongoDB');
   } catch (err) {
-    console.error('Failed to connect to DB, exiting.');
-    process.exit(1);
+    console.warn('⚠️ Failed to connect to DB, continuing without DB:', err.message);
+    console.log('⚠️ Some features may not work without database connection');
   }
 
   app.listen(PORT, () => {
-    console.log(`✅ Server running on ${BACKEND_URL}`);
+    console.log(`✅ Server running on ${BACKEND_URL} (Port: ${PORT})`);
   });
 };
 
