@@ -2,6 +2,11 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
+// Load font as base64 for embedding in SVG
+const fontPath = path.join(__dirname, '../Noto_Sans/static/NotoSans-Regular.ttf');
+const fontBase64 = fs.readFileSync(fontPath).toString('base64');
+
+
 /**
  * Generates an SVG containing text information.
  *
@@ -84,22 +89,31 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
 
   const svg = `
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
-      <style>
-        .footertext {
-          font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-          fill: #292d6c;
-          font-weight: bold;
-          font-size: ${allFontSize}px;
-          text-anchor: start;
-          dominant-baseline: middle;
-        }
-        .footertext.italic {
-          font-style: italic;
-        }
-      </style>
+      <defs>
+        <style type="text/css">
+          @font-face {
+            font-family: 'Noto Sans';
+            src: url('data:font/ttf;base64,${fontBase64}') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+          }
+          .footertext {
+            font-family: 'Noto Sans', sans-serif;
+            fill: #292d6c;
+            font-weight: bold;
+            font-size: ${allFontSize}px;
+            text-anchor: start;
+            dominant-baseline: middle;
+          }
+          .footertext.italic {
+            font-style: italic;
+          }
+        </style>
+      </defs>
       ${svgLines.join('\n')}
     </svg>
   `;
+
   console.log('DEBUG generateFooterSVG generated SVG:', svg);
   return svg;
 }

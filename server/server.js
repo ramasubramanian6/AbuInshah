@@ -71,15 +71,20 @@ app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
 app.use(express.static(path.join(__dirname, '../client/dist')));
 app.use(express.static(path.join(__dirname, 'uploads')));
 
-// Serve font files with proper MIME types and caching
-app.use('/assets/fonts', express.static(path.join(__dirname, '../client/assets/fonts'), {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.ttf')) {
-      res.setHeader('Content-Type', 'font/ttf');
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
-    }
-  }
-}));
+// REMOVED: Separate font serving route (lines 74-82)
+// Font files are now served from the dist folder via the general static file serving below.
+// Vite hashes font filenames during build (e.g., NotoSans-VariableFont_wdth,wght.ttf -> NotoSans-VariableFont_wdth_wght-CYoOFcCZ.ttf)
+// and updates CSS references accordingly. The server now serves all files from the built dist directory,
+// eliminating the need for a separate font route that was serving from the source directory.
+//
+// app.use('/assets/fonts', express.static(path.join(__dirname, '../client/assets/fonts'), {
+//   setHeaders: (res, filePath) => {
+//     if (filePath.endsWith('.ttf')) {
+//       res.setHeader('Content-Type', 'font/ttf');
+//       res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
+//     }
+//   }
+// }));
 
 app.use((err, req, res, next) => {
   console.error('Server Error:', err);
