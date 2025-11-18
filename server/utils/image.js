@@ -1,12 +1,13 @@
 const sharp = require('sharp');
+const { createCanvas, registerFont } = require('canvas');
 const fs = require('fs');
 const path = require('path');
 
 /* -------------------------------
     ✅ FIXED: SAFE FONT LOADING
  -------------------------------- */
-const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Regular.ttf');
-const italicFontPath = path.join(__dirname, '../Noto_Sans/static/NotoSans-Italic.ttf');
+const fontPath = path.join(__dirname, '../assets/fonts/NotoSans-Bold.ttf');
+const italicFontPath = path.join(__dirname, '../assets/fonts/NotoSans-BoldItalic.ttf');
 
 // Warn clearly if fonts are missing (production issue)
 if (!fs.existsSync(fontPath)) {
@@ -33,12 +34,41 @@ try {
    console.error('❌ ERROR reading italic font file:', e.message);
 }
 
+/* -----------------------------------------------------
+    Font Registration for Canvas
+----------------------------------------------------- */
+const FONTS = {
+  regular: fontPath,
+  italic: italicFontPath,
+  emoji: path.join(__dirname, '../assets/fonts/NotoEmoji-VariableFont_wght.ttf'),
+};
+
+function safeFontLoad(fontPath, family, style = "normal", weight = "normal") {
+  if (!fs.existsSync(fontPath)) {
+    console.error(`❌ FONT NOT FOUND: ${fontPath}`);
+    return false;
+  }
+
+  try {
+    registerFont(fontPath, { family, style, weight });
+    console.log(`✅ Loaded font: ${family} (${style}/${weight})`);
+    return true;
+  } catch (err) {
+    console.error(`❌ Failed loading font ${family}:`, err.message);
+    return false;
+  }
+}
+
+safeFontLoad(FONTS.regular, "NotoSans", "normal", "normal");
+safeFontLoad(FONTS.italic, "NotoSans", "italic", "normal");
+safeFontLoad(FONTS.emoji, "NotoEmoji");
+
 
 /**
- * Generates an SVG containing text information.
+ * Generates a canvas buffer containing text information.
  */
-function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fontSize, isTeamName = false) {
-  console.log('DEBUG generateFooterSVG called with:', { name, designation, phone, textWidth, footerHeight, fontSize, isTeamName });
+async function generateFooterBuffer(name, designation, phone, textWidth, footerHeight, fontSize, isTeamName = false) {
+  console.log('DEBUG generateFooterBuffer called with:', { name, designation, phone, textWidth, footerHeight, fontSize, isTeamName });
 
   const totalLines = 4;
   const lineHeight = Math.round(fontSize * 1.5);
@@ -74,14 +104,19 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
     formattedDesignation,
     `✔️ Investments ✔️ Insurance ✔️ Properties`,
     `Phone: ${String(phone || '')}`,
-  ].map(l => escapeXml(l));
+  ];
 
   const maxTextWidth = Math.max(10, textWidth - textPadding * 2);
-  const approxCharWidth = 0.55;
+
+  // Create temp canvas for font size calculation
+  const tempCanvas = createCanvas(1, 1);
+  const tempCtx = tempCanvas.getContext("2d");
 
   const fitsAtSize = (size) => {
-    const charWidth = size * approxCharWidth;
-    return lines.every(line => (line.length * charWidth) <= maxTextWidth);
+    return lines.every(line => {
+      tempCtx.font = `normal ${size}px "NotoSans", "NotoEmoji"`;
+      return tempCtx.measureText(line).width <= maxTextWidth;
+    });
   };
 
   while (allFontSize > MIN_FONT_SIZE && !fitsAtSize(allFontSize)) {
@@ -89,51 +124,24 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
     if (allFontSize <= MIN_FONT_SIZE) break;
   }
 
-  let svgLines = [];
+  const canvas = createCanvas(textWidth, footerHeight);
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = "transparent";
+  ctx.fillRect(0, 0, textWidth, footerHeight);
+
+  ctx.fillStyle = "#292d6c";
+  ctx.textBaseline = "middle";
+
   let y = startY;
   for (let i = 0; i < lines.length; i++) {
-    if (i === 1) {
-      svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext italic">${lines[i]}</text>`);
-    } else {
-      svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${lines[i]}</text>`);
-    }
+    const isItalic = i === 1;
+    ctx.font = `${isItalic ? "italic" : "normal"} ${allFontSize}px "NotoSans", "NotoEmoji"`;
+    ctx.fillText(lines[i], textPadding, y);
     y += lineHeight;
   }
 
-  const svg = `
-    <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <style type="text/css">
-          @font-face {
-            font-family: 'Noto Sans';
-            src: url('data:font/ttf;base64,${fontBase64}') format('truetype');
-            font-weight: normal;
-            font-style: normal;
-          }
-          @font-face {
-            font-family: 'Noto Sans';
-            src: url('data:font/ttf;base64,${italicFontBase64}') format('truetype');
-            font-weight: normal;
-            font-style: italic;
-          }
-          .footertext {
-            font-family: 'Noto Sans', sans-serif;
-            fill: #292d6c;
-            font-weight: bold;
-            font-size: ${allFontSize}px;
-            text-anchor: start;
-            dominant-baseline: middle;
-          }
-          .footertext.italic {
-            font-style: italic;
-          }
-        </style>
-      </defs>
-      ${svgLines.join('\n')}
-    </svg>
-  `;
-
-  return svg;
+  return canvas.toBuffer("image/png");
 }
 
 
@@ -208,7 +216,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     const footerHeight = Math.max(photoSize, requiredTextHeight, logoSize) + 18;
 
     const isTeamName = Boolean(person.teamName && String(person.teamName).trim());
-    const footerSVG = generateFooterSVG(
+    const textBuffer = await generateFooterBuffer(
       person.name,
       isTeamName ? person.teamName : person.designation,
       person.phone,
@@ -217,8 +225,6 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
       fontSize,
       isTeamName
     );
-
-    const textBuffer = await sharp(Buffer.from(footerSVG)).png().toBuffer();
     const textMetadata = await sharp(textBuffer).metadata();
 
     const circularPhoto = await sharp(person.photo)
@@ -298,7 +304,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
 }
 
 module.exports = {
-  generateFooterSVG,
-  processCircularImage,
-  createFinalPoster,
+   generateFooterBuffer,
+   processCircularImage,
+   createFinalPoster,
 };
